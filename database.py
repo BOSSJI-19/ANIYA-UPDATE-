@@ -13,7 +13,7 @@ try:
     investments_col = db["investments"]
     codes_col = db["codes"]
     keys_col = db["api_keys"]
-    settings_col = db["settings"]  # <-- NEW: Economy Settings
+    settings_col = db["settings"]
     
     print("✅ Database Connected!")
 except Exception as e:
@@ -31,11 +31,12 @@ def register_user(user_id, name):
     user = {
         "_id": user_id, 
         "name": name, 
-        "balance": 500,  # Bonus
-        "loan": 0,
+        "balance": 500,       # Wallet (Rob ho sakta hai)
+        "bank_balance": 0,    # 🏦 Bank (Safe)
+        "loan": 0,            # Loan status
         "titles": [],
-        "kills": 0,      # <-- Kill Count Start
-        "protection": 0  # <-- Protection Timer
+        "kills": 0,
+        "protection": 0
     } 
     users_col.insert_one(user)
     return True
@@ -45,21 +46,41 @@ def get_user(user_id):
     return users_col.find_one({"_id": user_id})
 
 def update_balance(user_id, amount):
-    """Add or subtract money"""
+    """Add or subtract money (Wallet)"""
     users_col.update_one({"_id": user_id}, {"$inc": {"balance": amount}}, upsert=True)
 
 def get_balance(user_id):
-    """Get current balance"""
+    """Get current wallet balance"""
     user = users_col.find_one({"_id": user_id})
     return user["balance"] if user else 0
 
-# --- 🔥 NEW: KILL & CRIME STATS ---
+# --- 🔥 NEW: BANK FUNCTIONS ---
+
+def get_bank_balance(user_id):
+    """Bank ka balance batayega"""
+    user = users_col.find_one({"_id": user_id})
+    return user.get("bank_balance", 0) if user else 0
+
+def update_bank_balance(user_id, amount):
+    """Bank me paisa daalega ya nikalega"""
+    users_col.update_one({"_id": user_id}, {"$inc": {"bank_balance": amount}}, upsert=True)
+
+def get_loan(user_id):
+    """Check karega kitna loan baki hai"""
+    user = users_col.find_one({"_id": user_id})
+    return user.get("loan", 0) if user else 0
+
+def set_loan(user_id, amount):
+    """Loan update karega (Lena ya chukana)"""
+    users_col.update_one({"_id": user_id}, {"$set": {"loan": amount}}, upsert=True)
+
+# --- NEW: KILL & CRIME STATS ---
 
 def update_kill_count(user_id):
     """Kill count badhayega"""
     users_col.update_one({"_id": user_id}, {"$inc": {"kills": 1}}, upsert=True)
 
-# --- 🔥 NEW: PROTECTION SYSTEM ---
+# --- NEW: PROTECTION SYSTEM ---
 
 def set_protection(user_id, duration_hours):
     """User ko shield dega"""
@@ -70,10 +91,9 @@ def is_protected(user_id):
     """Check karega shield active hai ya nahi"""
     user = users_col.find_one({"_id": user_id})
     if not user or "protection" not in user: return False
-    # Agar current time expiry se kam hai, toh protected hai
     return time.time() < user["protection"]
 
-# --- 🔥 NEW: ECONOMY & RESET ---
+# --- NEW: ECONOMY & RESET ---
 
 def get_economy_status():
     """Economy ON hai ya OFF check karega"""
@@ -89,7 +109,6 @@ def wipe_database():
     """⚠️ DANGER: Sab delete kar dega (Reset)"""
     users_col.delete_many({})
     investments_col.delete_many({})
-    # Groups, Keys aur Settings delete nahi karenge taaki setup safe rahe
     return True
 
 # --- GROUP & MARKET FUNCTIONS ---
@@ -106,7 +125,6 @@ def get_group_price(group_id):
     """Calculate Share Price based on Activity"""
     grp = groups_col.find_one({"_id": group_id})
     if not grp: return 10.0
-    # Formula: Base 10 + (Score * 0.5)
     return round(10 + (grp.get("activity", 0) * 0.5), 2)
 
 # --- API KEY MANAGEMENT FUNCTIONS ---
