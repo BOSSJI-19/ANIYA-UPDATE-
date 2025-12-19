@@ -146,3 +146,14 @@ def get_all_keys():
     keys = list(keys_col.find({}, {"_id": 0, "key": 1}))
     return [k["key"] for k in keys]
     
+# --- database.py ke end mein ye add karo ---
+
+def set_dead(user_id, status: bool):
+    """User ko Dead (True) ya Alive (False) set karega"""
+    users_col.update_one({"_id": user_id}, {"$set": {"is_dead": status}}, upsert=True)
+
+def is_dead(user_id):
+    """Check karega banda mara hua hai ya zinda"""
+    user = users_col.find_one({"_id": user_id})
+    return user.get("is_dead", False) if user else False
+    
