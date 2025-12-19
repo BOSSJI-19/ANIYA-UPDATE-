@@ -9,7 +9,8 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 from config import TELEGRAM_TOKEN, GRID_SIZE, DELETE_TIMER
 from database import users_col, codes_col, get_user, update_balance, get_balance, check_registered, register_user, update_group_activity
 from ai_chat import get_yuki_response
-import admin, start, help, group, leaderboard, pay
+# 👇 BANK IMPORT KIYA HAI
+import admin, start, help, group, leaderboard, pay, bank 
 
 # --- FLASK SERVER (FOR UPTIME) ---
 app = Flask('')
@@ -43,7 +44,8 @@ async def ensure_registered(update, context):
     user = update.effective_user
     if not check_registered(user.id):
         kb = [[InlineKeyboardButton("📝 Register", callback_data=f"reg_start_{user.id}")]]
-        await update.message.reply_text(f"🛑 **{user.first_name}, Register First!**\nGet ₹500 Bonus.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        # Group me reply karke batayega
+        await update.message.reply_text(f"🛑 **{user.first_name}, Register First!**\nGet ₹500 Bonus.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN, quote=True)
         return False
     return True
 
@@ -72,6 +74,7 @@ async def group_join_reward(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     bal = get_balance(user.id)
+    # Quote=True se group me pata chalega kiska balance hai
     await update.message.reply_text(f"💳 **{user.first_name}'s Balance:** ₹{bal}", parse_mode=ParseMode.MARKDOWN, quote=True)
 
 async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -84,7 +87,7 @@ async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.job_queue.run_once(delete_job, 5, chat_id=msg.chat_id, data=msg.message_id)
         return
 
-    # 🔥 FIX: .strip() lagaya taaki spaces hat jayein
+    # Strip spaces
     code_name = context.args[0].strip()
 
     code_data = codes_col.find_one({"code": code_name})
@@ -102,18 +105,21 @@ async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def bet_menu(update, context):
     if not await ensure_registered(update, context): return
+    
+    # Group Friendly Delete Logic
     try: await update.message.delete()
-    except: pass
+    except: pass 
     
     try: bet = int(context.args[0])
     except: 
-        msg = await update.message.reply_text("⚠️ **Format:** `/bet 100`", parse_mode=ParseMode.MARKDOWN, quote=True)
+        # Error msg group me quote karke bhejo
+        msg = await update.message.reply_text("⚠️ **Invalid Format!**\nUse: `/bet 100`", parse_mode=ParseMode.MARKDOWN, quote=True)
         context.job_queue.run_once(delete_job, 5, chat_id=msg.chat_id, data=msg.message_id)
         return
         
     uid = update.effective_user.id
     if get_balance(uid) < bet: 
-        msg = await update.message.reply_text("❌ **Low Balance!**", quote=True)
+        msg = await update.message.reply_text("❌ **Low Balance!**\nPaisa kama ke aao.", quote=True)
         context.job_queue.run_once(delete_job, 5, chat_id=msg.chat_id, data=msg.message_id)
         return
     
@@ -122,7 +128,9 @@ async def bet_menu(update, context):
         [InlineKeyboardButton("🔴 5 Bombs", callback_data=f"set_5_{bet}_{uid}"), InlineKeyboardButton("💀 10 Bombs", callback_data=f"set_10_{bet}_{uid}")],
         [InlineKeyboardButton("❌ Cancel", callback_data=f"close_{uid}")]
     ]
-    await update.message.reply_text(f"🎮 **Game Setup ({update.effective_user.first_name})**\nBet: ₹{bet}", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    
+    # 🔥 FIX: quote=True lagaya hai taaki group me tag ho jaye
+    await update.message.reply_text(f"🎮 **Game Setup ({update.effective_user.first_name})**\nBet: ₹{bet}\nSelect Difficulty 👇", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN, quote=True)
 
 async def shop_menu(update, context):
     if not await ensure_registered(update, context): return
@@ -131,7 +139,7 @@ async def shop_menu(update, context):
     for k, v in SHOP_ITEMS.items():
         kb.append([InlineKeyboardButton(f"{v['name']} - ₹{v['price']}", callback_data=f"buy_{k}_{uid}")])
     kb.append([InlineKeyboardButton("❌ Close", callback_data=f"close_{uid}")])
-    await update.message.reply_text("🛒 **VIP SHOP**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text("🛒 **VIP SHOP**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN, quote=True)
 
 # --- CALLBACK HANDLER ---
 async def callback_handler(update, context):
@@ -139,6 +147,7 @@ async def callback_handler(update, context):
     data = q.data
     uid = q.from_user.id
     
+    # REGISTER BUTTON
     if data.startswith("reg_start_"):
         target_id = int(data.split("_")[2])
         if uid != target_id: 
@@ -153,6 +162,7 @@ async def callback_handler(update, context):
     parts = data.split("_")
     act = parts[0]
     
+    # SHOP BUY
     if act == "buy":
         target_id = int(parts[2])
         if uid != target_id:
@@ -168,6 +178,7 @@ async def callback_handler(update, context):
         await q.message.delete()
         return
 
+    # GAME START
     if act == "set":
         owner = int(parts[3])
         if uid != owner:
@@ -190,6 +201,7 @@ async def callback_handler(update, context):
         await q.edit_message_text(f"💣 Mines: {mines} | Bet: ₹{bet}", reply_markup=InlineKeyboardMarkup(kb))
         return
 
+    # GAME PLAY
     if act == "clk":
         owner = int(parts[2])
         if uid != owner:
@@ -235,6 +247,7 @@ async def callback_handler(update, context):
                 await q.edit_message_text(f"💎 Safe! Current Win: ₹{win_now}", reply_markup=InlineKeyboardMarkup(kb))
         return
 
+    # CASHOUT
     if act == "cash":
         owner = int(parts[1])
         if uid != owner:
@@ -268,9 +281,11 @@ async def handle_message(update, context):
     if not update.message or not update.message.text: return
     text = update.message.text
 
+    # Group Activity Track
     if chat.type in ["group", "supergroup"]:
         update_group_activity(chat.id, chat.title)
 
+    # Yuki Chat Logic
     should_reply = False
     if chat.type == "private":
         should_reply = True
@@ -301,6 +316,13 @@ def main():
     app.add_handler(CommandHandler("bet", bet_menu))
     app.add_handler(CommandHandler("shop", shop_menu))
     app.add_handler(CommandHandler("redeem", redeem_code))
+    
+    # 🔥 BANK (New Commands)
+    app.add_handler(CommandHandler("bank", bank.bank_info))
+    app.add_handler(CommandHandler("deposit", bank.deposit))
+    app.add_handler(CommandHandler("withdraw", bank.withdraw))
+    app.add_handler(CommandHandler("loan", bank.take_loan))
+    app.add_handler(CommandHandler("payloan", bank.repay_loan))
     
     # Market
     app.add_handler(CommandHandler("ranking", group.ranking))
@@ -344,4 +366,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+            
