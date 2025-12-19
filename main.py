@@ -8,7 +8,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 # IMPORTS
 from config import TELEGRAM_TOKEN, GRID_SIZE, DELETE_TIMER
 from database import users_col, codes_col, get_user, update_balance, get_balance, check_registered, register_user, update_group_activity
-from ai_chat import get_yuki_response # <-- Updated AI Import
+from ai_chat import get_yuki_response
 import admin, start, help, group, leaderboard
 
 # --- FLASK SERVER (FOR UPTIME) ---
@@ -43,7 +43,8 @@ async def ensure_registered(update, context):
     user = update.effective_user
     if not check_registered(user.id):
         kb = [[InlineKeyboardButton("📝 Register", callback_data=f"reg_start_{user.id}")]]
-        await update.message.reply_text(f"🛑 **Register First!**\nGet ₹500 Bonus.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        # Group me reply karke batayega
+        await update.message.reply_text(f"🛑 **{user.first_name}, Register First!**\nGet ₹500 Bonus.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
         return False
     return True
 
@@ -52,42 +53,54 @@ async def ensure_registered(update, context):
 async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     bal = get_balance(user.id)
-    await update.message.reply_text(f"💳 **Wallet Balance:** ₹{bal}", parse_mode=ParseMode.MARKDOWN)
+    # Quote reply taaki group me pata chale kiska balance hai
+    await update.message.reply_text(f"💳 **{user.first_name}'s Balance:** ₹{bal}", parse_mode=ParseMode.MARKDOWN, quote=True)
 
 async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_registered(update, context): return
     user = update.effective_user
     try: code_name = context.args[0]
     except: 
-        msg = await update.message.reply_text("⚠️ Usage: `/redeem <code>`")
+        msg = await update.message.reply_text("⚠️ Usage: `/redeem <code>`", quote=True)
         context.job_queue.run_once(delete_job, 5, chat_id=msg.chat_id, data=msg.message_id)
         return
 
     code_data = codes_col.find_one({"code": code_name})
-    if not code_data: return await update.message.reply_text("❌ Invalid Code!")
-    if user.id in code_data.get("redeemed_by", []): return await update.message.reply_text("⚠️ Already redeemed!")
-    if len(code_data.get("redeemed_by", [])) >= code_data.get("limit", 0): return await update.message.reply_text("❌ Code Expired!")
+    if not code_data: return await update.message.reply_text("❌ Invalid Code!", quote=True)
+    if user.id in code_data.get("redeemed_by", []): return await update.message.reply_text("⚠️ Already redeemed!", quote=True)
+    if len(code_data.get("redeemed_by", [])) >= code_data.get("limit", 0): return await update.message.reply_text("❌ Code Expired!", quote=True)
     
     amount = code_data["amount"]
     update_balance(user.id, amount)
     codes_col.update_one({"code": code_name}, {"$push": {"redeemed_by": user.id}})
-    await update.message.reply_text(f"🎉 **Added ₹{amount}**\nNew Balance: ₹{get_balance(user.id)}", parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(f"🎉 **Added ₹{amount}**\nNew Balance: ₹{get_balance(user.id)}", parse_mode=ParseMode.MARKDOWN, quote=True)
 
 async def bet_menu(update, context):
     if not await ensure_registered(update, context): return
+    
+    # Try delete (Group me fail ho sakta hai agar admin nahi hai, isliye pass)
     try: await update.message.delete()
     except: pass
+    
     try: bet = int(context.args[0])
-    except: return await update.message.reply_text("⚠️ Use: `/bet 100`")
+    except: 
+        # Group me user ko tag karke batao galti
+        msg = await update.message.reply_text("⚠️ **Format:** `/bet 100`", parse_mode=ParseMode.MARKDOWN, quote=True)
+        context.job_queue.run_once(delete_job, 5, chat_id=msg.chat_id, data=msg.message_id)
+        return
+        
     uid = update.effective_user.id
-    if get_balance(uid) < bet: return await update.message.reply_text("❌ Low Balance")
+    if get_balance(uid) < bet: 
+        msg = await update.message.reply_text("❌ **Low Balance!**", quote=True)
+        context.job_queue.run_once(delete_job, 5, chat_id=msg.chat_id, data=msg.message_id)
+        return
     
     kb = [
         [InlineKeyboardButton("🟢 1 Bomb", callback_data=f"set_1_{bet}_{uid}"), InlineKeyboardButton("🟡 3 Bombs", callback_data=f"set_3_{bet}_{uid}")],
         [InlineKeyboardButton("🔴 5 Bombs", callback_data=f"set_5_{bet}_{uid}"), InlineKeyboardButton("💀 10 Bombs", callback_data=f"set_10_{bet}_{uid}")],
         [InlineKeyboardButton("❌ Cancel", callback_data=f"close_{uid}")]
     ]
-    await update.message.reply_text(f"🎮 **Game Setup**\nBet: ₹{bet}", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(f"🎮 **Game Setup ({update.effective_user.first_name})**\nBet: ₹{bet}", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
 async def shop_menu(update, context):
     if not await ensure_registered(update, context): return
@@ -98,32 +111,57 @@ async def shop_menu(update, context):
     kb.append([InlineKeyboardButton("❌ Close", callback_data=f"close_{uid}")])
     await update.message.reply_text("🛒 **VIP SHOP**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
+# --- 🔥 FIXED CALLBACK HANDLER (GROUP SUPPORT) ---
 async def callback_handler(update, context):
     q = update.callback_query
     data = q.data
     uid = q.from_user.id
     
     if data.startswith("reg_start_"):
-        if uid != int(data.split("_")[2]): return await q.answer("Not for you!", show_alert=True)
-        if register_user(uid, q.from_user.first_name): await q.edit_message_text("✅ **Registered!**\nBonus ₹500 Added.", parse_mode=ParseMode.MARKDOWN)
-        else: await q.answer("Already registered!")
+        target_id = int(data.split("_")[2])
+        if uid != target_id: 
+            await q.answer("Ye button tumhare liye nahi hai! 😠", show_alert=True)
+            return
+        if register_user(uid, q.from_user.first_name): 
+            await q.edit_message_text("✅ **Registered!**\nBonus ₹500 Added.", parse_mode=ParseMode.MARKDOWN)
+        else: 
+            await q.answer("Already registered!")
         return
 
     parts = data.split("_")
     act = parts[0]
     
+    # SHOP BUY
     if act == "buy":
+        target_id = int(parts[2])
+        if uid != target_id:
+            await q.answer("Apna Shop Kholo! 🛒", show_alert=True)
+            return
+            
         item = SHOP_ITEMS.get(parts[1])
-        if get_balance(uid) < item["price"]: return await q.answer("No Money!", show_alert=True)
+        if get_balance(uid) < item["price"]: 
+            await q.answer("Paisa nahi hai! ❌", show_alert=True)
+            return
+            
         update_balance(uid, -item["price"])
         users_col.update_one({"_id": uid}, {"$push": {"titles": item["name"]}})
-        await q.answer("✅ Bought!")
+        await q.answer(f"✅ Bought {item['name']}!")
+        await q.message.delete()
         return
 
+    # GAME SETUP
     if act == "set":
-        mines = int(parts[1]); bet = int(parts[2]); owner = int(parts[3])
-        if uid != owner: return
-        if get_balance(owner) < bet: return await q.answer("No Money")
+        owner = int(parts[3])
+        if uid != owner:
+            await q.answer("Ye game tumhara nahi hai! 🚫", show_alert=True)
+            return
+            
+        mines = int(parts[1]); bet = int(parts[2])
+        if get_balance(owner) < bet: 
+            await q.answer("Balance khatam ho gaya! 📉", show_alert=True)
+            await q.message.delete()
+            return
+            
         update_balance(owner, -bet)
         grid = [0]*(GRID_SIZE**2)
         for i in random.sample(range(16), mines): grid[i] = 1
@@ -136,51 +174,92 @@ async def callback_handler(update, context):
         await q.edit_message_text(f"💣 Mines: {mines} | Bet: ₹{bet}", reply_markup=InlineKeyboardMarkup(kb))
         return
 
+    # GAME CLICK
     if act == "clk":
-        idx = int(parts[1]); owner = int(parts[2])
-        if uid != owner: return
+        owner = int(parts[2])
+        if uid != owner:
+            await q.answer("Apna game khelo bhai! 😒", show_alert=True)
+            return
+            
         game = active_games.get(f"{owner}")
-        if not game: return await q.message.delete()
-        if game["grid"][idx] == 1:
+        if not game: 
+            await q.answer("Game Expired / Error ❌", show_alert=True)
+            await q.message.delete()
+            return
+            
+        idx = int(parts[1])
+        
+        # Already Clicked Check
+        if idx in game["rev"]:
+            await q.answer("Already Open Hai! 👀", show_alert=False)
+            return
+
+        if game["grid"][idx] == 1: # BOMB
             del active_games[f"{owner}"]
             await q.edit_message_text(f"💥 **BOOM!** Lost ₹{game['bet']}", parse_mode=ParseMode.MARKDOWN)
             context.job_queue.run_once(delete_job, DELETE_TIMER, chat_id=q.message.chat_id, data=q.message.message_id)
-        else:
-            if idx not in game["rev"]: game["rev"].append(idx)
+        else: # SAFE
+            game["rev"].append(idx)
             mults = BOMB_CONFIG[game["mines"]]
+            
             if len(game["rev"]) == (16 - game["mines"]):
                 win = int(game["bet"] * mults[-1])
                 update_balance(owner, win)
                 del active_games[f"{owner}"]
-                await q.edit_message_text(f"👑 **WON ₹{win}**", parse_mode=ParseMode.MARKDOWN)
+                await q.edit_message_text(f"👑 **JACKPOT! WON ₹{win}**", parse_mode=ParseMode.MARKDOWN)
             else:
+                # Update Grid
                 kb = []
                 for r in range(4):
                     row = []
                     for c in range(4):
                         i = r*4+c
-                        txt = "💎" if i in game["rev"] else "🟦"
-                        cb = "noop" if i in game["rev"] else f"clk_{i}_{owner}"
+                        if i in game["rev"]:
+                            txt = "💎"
+                            cb = f"noop_{i}" # No Operation
+                        else:
+                            txt = "🟦"
+                            cb = f"clk_{i}_{owner}"
                         row.append(InlineKeyboardButton(txt, callback_data=cb))
                     kb.append(row)
                 win_now = int(game["bet"] * mults[len(game["rev"])-1])
                 kb.append([InlineKeyboardButton(f"💰 Cashout ₹{win_now}", callback_data=f"cash_{owner}")])
-                await q.edit_message_text(f"💎 Safe! Won: ₹{win_now}", reply_markup=InlineKeyboardMarkup(kb))
+                await q.edit_message_text(f"💎 Safe! Current Win: ₹{win_now}", reply_markup=InlineKeyboardMarkup(kb))
         return
 
+    # CASHOUT
     if act == "cash":
         owner = int(parts[1])
-        if uid != owner: return
+        if uid != owner:
+            await q.answer("Haath mat lagana! 😡", show_alert=True)
+            return
+            
         game = active_games.get(f"{owner}")
+        if not game:
+            await q.answer("Game Khatam!", show_alert=True)
+            await q.message.delete()
+            return
+
         mults = BOMB_CONFIG[game["mines"]]
         win = int(game["bet"] * mults[len(game["rev"])-1])
         update_balance(owner, win)
         del active_games[f"{owner}"]
         await q.edit_message_text(f"💰 **Cashed Out: ₹{win}**", parse_mode=ParseMode.MARKDOWN)
         context.job_queue.run_once(delete_job, DELETE_TIMER, chat_id=q.message.chat_id, data=q.message.message_id)
-    if act == "close": await q.message.delete()
 
-# --- 🔥 UPDATED MESSAGE HANDLER (WITH MEMORY SUPPORT) ---
+    # CLOSE / CANCEL
+    if act == "close": 
+        owner = int(parts[1])
+        if uid != owner:
+            await q.answer("Tum close nahi kar sakte!", show_alert=True)
+            return
+        await q.message.delete()
+        
+    # NO OP (For already opened gems)
+    if act == "noop":
+        await q.answer("Ye khul chuka hai!", show_alert=False)
+
+# --- MESSAGE HANDLER ---
 async def handle_message(update, context):
     user = update.effective_user
     chat = update.effective_chat
@@ -194,13 +273,9 @@ async def handle_message(update, context):
     # 2. Yuki Response Logic
     should_reply = False
     
-    # CASE A: Private Chat
     if chat.type == "private":
         should_reply = True
-        
-    # CASE B: Group Chat
     elif chat.type in ["group", "supergroup"]:
-        # Reply to bot, "yuki" in text, or @BotMention
         if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
             should_reply = True
         elif "yuki" in text.lower():
@@ -210,11 +285,8 @@ async def handle_message(update, context):
 
     if should_reply:
         await context.bot.send_chat_action(chat_id=chat.id, action="typing")
-        
-        # 👇 IMPORTANT: Pass user.id for MEMORY
         ai_reply = get_yuki_response(user.id, text, user.first_name)
-        
-        await update.message.reply_text(ai_reply)
+        await update.message.reply_text(ai_reply, quote=True)
 
 # --- MAIN ---
 def main():
