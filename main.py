@@ -11,19 +11,14 @@ from database import users_col, codes_col, get_user, update_balance, get_balance
 from ai_chat import get_yuki_response
 import admin, start, help, group, leaderboard
 
-# --- FLASK SERVER (FOR UPTIME) ---
+# --- FLASK SERVER ---
 app = Flask('')
 
 @app.route('/')
-def home():
-    return "I am Alive! 24/7"
+def home(): return "I am Alive! 24/7"
 
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
+def run(): app.run(host='0.0.0.0', port=8080)
+def keep_alive(): t = Thread(target=run); t.start()
 
 # VARS
 active_games = {} 
@@ -52,12 +47,14 @@ async def ensure_registered(update, context):
         return False
     return True
 
-# --- HANDLERS ---
+# 🔥 FIXED: BALANCE COMMAND ADDED
+async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    bal = get_balance(user.id)
+    await update.message.reply_text(f"💳 **Wallet Balance:** ₹{bal}", parse_mode=ParseMode.MARKDOWN)
 
-# 🔥 FIXED: REDEEM FUNCTION ADDED HERE
 async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_registered(update, context): return
-    
     user = update.effective_user
     try: code_name = context.args[0]
     except: 
@@ -65,38 +62,22 @@ async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.job_queue.run_once(delete_job, 5, chat_id=msg.chat_id, data=msg.message_id)
         return
 
-    # Check Code in DB
     code_data = codes_col.find_one({"code": code_name})
+    if not code_data: return await update.message.reply_text("❌ Invalid Code!")
+    if user.id in code_data.get("redeemed_by", []): return await update.message.reply_text("⚠️ Already redeemed!")
+    if len(code_data.get("redeemed_by", [])) >= code_data.get("limit", 0): return await update.message.reply_text("❌ Code Expired!")
     
-    # Validations
-    if not code_data:
-        await update.message.reply_text("❌ Invalid Code!")
-        return
-        
-    if user.id in code_data.get("redeemed_by", []):
-        await update.message.reply_text("⚠️ You already redeemed this code!")
-        return
-        
-    if len(code_data.get("redeemed_by", [])) >= code_data.get("limit", 0):
-        await update.message.reply_text("❌ Code Limit Reached (Expired)!")
-        return
-    
-    # Success Transaction
     amount = code_data["amount"]
     update_balance(user.id, amount)
     codes_col.update_one({"code": code_name}, {"$push": {"redeemed_by": user.id}})
-    
-    await update.message.reply_text(f"🎉 **Success!**\nAdded: ₹{amount}\nNew Balance: ₹{get_balance(user.id)}", parse_mode=ParseMode.MARKDOWN)
-
+    await update.message.reply_text(f"🎉 **Added ₹{amount}**\nNew Balance: ₹{get_balance(user.id)}", parse_mode=ParseMode.MARKDOWN)
 
 async def bet_menu(update, context):
     if not await ensure_registered(update, context): return
     try: await update.message.delete()
     except: pass
-    
     try: bet = int(context.args[0])
     except: return await update.message.reply_text("⚠️ Use: `/bet 100`")
-    
     uid = update.effective_user.id
     if get_balance(uid) < bet: return await update.message.reply_text("❌ Low Balance")
     
@@ -114,7 +95,7 @@ async def shop_menu(update, context):
     for k, v in SHOP_ITEMS.items():
         kb.append([InlineKeyboardButton(f"{v['name']} - ₹{v['price']}", callback_data=f"buy_{k}_{uid}")])
     kb.append([InlineKeyboardButton("❌ Close", callback_data=f"close_{uid}")])
-    await update.message.reply_text("🛒 **VIP SHOP**\nBuy titles to look cool on Leaderboard!", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text("🛒 **VIP SHOP**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
 async def callback_handler(update, context):
     q = update.callback_query
@@ -123,8 +104,7 @@ async def callback_handler(update, context):
     
     if data.startswith("reg_start_"):
         if uid != int(data.split("_")[2]): return await q.answer("Not for you!", show_alert=True)
-        if register_user(uid, q.from_user.first_name):
-            await q.edit_message_text("✅ **Registered!**\nBonus ₹500 Added.", parse_mode=ParseMode.MARKDOWN)
+        if register_user(uid, q.from_user.first_name): await q.edit_message_text("✅ **Registered!**\nBonus ₹500 Added.", parse_mode=ParseMode.MARKDOWN)
         else: await q.answer("Already registered!")
         return
 
@@ -144,11 +124,9 @@ async def callback_handler(update, context):
         if uid != owner: return
         if get_balance(owner) < bet: return await q.answer("No Money")
         update_balance(owner, -bet)
-        
         grid = [0]*(GRID_SIZE**2)
         for i in random.sample(range(16), mines): grid[i] = 1
         active_games[f"{owner}"] = {"grid": grid, "rev": [], "bet": bet, "mines": mines}
-        
         kb = []
         for r in range(4):
             row = []
@@ -162,15 +140,13 @@ async def callback_handler(update, context):
         if uid != owner: return
         game = active_games.get(f"{owner}")
         if not game: return await q.message.delete()
-        
-        if game["grid"][idx] == 1: # LOSE
+        if game["grid"][idx] == 1:
             del active_games[f"{owner}"]
             await q.edit_message_text(f"💥 **BOOM!** Lost ₹{game['bet']}", parse_mode=ParseMode.MARKDOWN)
             context.job_queue.run_once(delete_job, DELETE_TIMER, chat_id=q.message.chat_id, data=q.message.message_id)
-        else: # SAFE
+        else:
             if idx not in game["rev"]: game["rev"].append(idx)
             mults = BOMB_CONFIG[game["mines"]]
-            
             if len(game["rev"]) == (16 - game["mines"]):
                 win = int(game["bet"] * mults[-1])
                 update_balance(owner, win)
@@ -201,77 +177,75 @@ async def callback_handler(update, context):
         del active_games[f"{owner}"]
         await q.edit_message_text(f"💰 **Cashed Out: ₹{win}**", parse_mode=ParseMode.MARKDOWN)
         context.job_queue.run_once(delete_job, DELETE_TIMER, chat_id=q.message.chat_id, data=q.message.message_id)
-
     if act == "close": await q.message.delete()
 
-# --- MESSAGE HANDLER (TRACKING + AI CHAT) ---
+# --- 🔥 UPDATED MESSAGE HANDLER (GROUP LOGIC) ---
 async def handle_message(update, context):
     user = update.effective_user
     chat = update.effective_chat
-    
     if not update.message or not update.message.text: return
-    
     text = update.message.text
-    
-    # 1. GROUP ACTIVITY TRACKING
+
+    # 1. Activity Tracking
     if chat.type in ["group", "supergroup"]:
         update_group_activity(chat.id, chat.title)
 
-    # 2. YUKI AI CHAT LOGIC
-    # Reply ONLY if: Private Chat OR Reply to Bot
+    # 2. Yuki Response Logic
     should_reply = False
     
+    # CASE A: Private Chat (Hamesha reply karegi)
     if chat.type == "private":
         should_reply = True
-    elif update.message.reply_to_message:
-        if update.message.reply_to_message.from_user.id == context.bot.id:
+        
+    # CASE B: Group Chat (Specific Conditions)
+    elif chat.type in ["group", "supergroup"]:
+        # 1. Agar reply kiya bot ko
+        if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
             should_reply = True
-            
-    if should_reply and text:
-        # Send Typing Action
+        # 2. Agar naam liya "Yuki"
+        elif "yuki" in text.lower():
+            should_reply = True
+        # 3. Agar mention kiya "@BotUsername"
+        elif context.bot.username in text:
+            should_reply = True
+
+    if should_reply:
         await context.bot.send_chat_action(chat_id=chat.id, action="typing")
-        # Generate Response
         ai_reply = get_yuki_response(text, user.first_name)
-        # Send Reply
         await update.message.reply_text(ai_reply)
 
 # --- MAIN ---
 def main():
-    keep_alive() # Starts Flask Server
+    keep_alive()
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     
-    # User Commands
     app.add_handler(CommandHandler("start", start.start))
     app.add_handler(CommandHandler("help", help.help_command))
+    app.add_handler(CommandHandler("balance", balance_cmd)) # ✅ Added Here
     app.add_handler(CommandHandler("bet", bet_menu))
     app.add_handler(CommandHandler("shop", shop_menu))
-    app.add_handler(CommandHandler("redeem", redeem_code)) # ✅ Error Fixed (Function Defined above)
+    app.add_handler(CommandHandler("redeem", redeem_code))
     
-    # Group & Market
     app.add_handler(CommandHandler("ranking", group.ranking))
     app.add_handler(CommandHandler("market", group.market_info))
     app.add_handler(CommandHandler("invest", group.invest))
     app.add_handler(CommandHandler("sell", group.sell_shares))
     app.add_handler(CommandHandler("top", leaderboard.user_leaderboard))
     
-    # Admin Commands
     app.add_handler(CommandHandler("cast", admin.broadcast))
     app.add_handler(CommandHandler("code", admin.create_code))
     app.add_handler(CommandHandler("add", admin.add_money))
     
-    # API KEY COMMANDS
     app.add_handler(CommandHandler("addkey", admin.add_key_cmd))
     app.add_handler(CommandHandler("delkey", admin.remove_key_cmd))
     app.add_handler(CommandHandler("keys", admin.list_keys_cmd))
     
     app.add_handler(CallbackQueryHandler(callback_handler))
-    
-    # Message Handler (Must be last)
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     
-    print("🚀 BOT STARTED WITH 24/7 UPTIME & AI CHAT...")
+    print("🚀 BOT STARTED SUCCESSFULLY!")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
-        
+    
