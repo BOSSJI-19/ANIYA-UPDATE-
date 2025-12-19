@@ -22,26 +22,26 @@ async def bet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. Register Check
     if not check_registered(user.id):
         kb = [[InlineKeyboardButton("📝 Register", callback_data=f"reg_start_{user.id}")]]
-        await update.message.reply_text(f"🛑 **Register First!**", reply_markup=InlineKeyboardMarkup(kb), quote=True)
+        await update.message.reply_text(f"🛑 **Register First!**", reply_markup=InlineKeyboardMarkup(kb))
         return
 
-    # 🔥 FIX: Group me crash nahi hoga ab
+    # Group me crash nahi hoga (Try-Except)
     try: await update.message.delete()
     except: pass 
     
     # 2. Argument Check
     try: bet_amount = int(context.args[0])
     except: 
-        await update.message.reply_text("⚠️ **Format:** `/bet 100`", parse_mode=ParseMode.MARKDOWN, quote=True)
+        await update.message.reply_text("⚠️ **Format:** `/bet 100`", parse_mode=ParseMode.MARKDOWN)
         return
         
     # 3. Balance Check
     if get_balance(user.id) < bet_amount: 
-        await update.message.reply_text("❌ **Low Balance!**", quote=True)
+        await update.message.reply_text("❌ **Low Balance!**")
         return
     
     if bet_amount < 10:
-        await update.message.reply_text("❌ Minimum Bet ₹10 hai!", quote=True)
+        await update.message.reply_text("❌ Minimum Bet ₹10 hai!")
         return
 
     # 4. Menu Logic
@@ -51,14 +51,13 @@ async def bet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("❌ Cancel", callback_data=f"close_{user.id}")]
     ]
     
-    # Quote=True taaki user ko tag kare
+    # Note: reply_text automatically quotes the message
     await update.message.reply_text(
         f"🎮 **Game Setup ({user.first_name})**\n"
         f"💰 Bet Amount: ₹{bet_amount}\n"
         f"💣 Select Difficulty 👇", 
         reply_markup=InlineKeyboardMarkup(kb), 
-        parse_mode=ParseMode.MARKDOWN,
-        quote=True
+        parse_mode=ParseMode.MARKDOWN
     )
 
 # --- CALLBACK HANDLER (Game Logic) ---
