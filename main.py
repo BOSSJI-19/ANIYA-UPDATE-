@@ -8,9 +8,10 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 # IMPORTS
 from config import TELEGRAM_TOKEN
 from database import users_col, codes_col, update_balance, get_balance, check_registered, register_user, update_group_activity, update_username
-from ai_chat import get_yuki_response
+# 🔥 Added get_mimi_sticker import
+from ai_chat import get_yuki_response, get_mimi_sticker
 
-# MODULES (🔥 Added grouptools)
+# MODULES
 import admin, start, help, group, leaderboard, pay, bank, bet, wordseek, grouptools
 
 # --- FLASK SERVER ---
@@ -108,7 +109,7 @@ async def callback_handler(update, context):
         return
 
     # 2. WORD SEEK GAME
-    if data.startswith(("wrank_", "new_wordseek_", "close_wrank")):
+    if data.startswith(("wrank_", "new_wordseek_", "close_wrank", "end_wordseek")):
         await wordseek.wordseek_callback(update, context)
         return
 
@@ -150,6 +151,8 @@ async def callback_handler(update, context):
 
 # --- MESSAGE HANDLER (TEXT & MEDIA) ---
 async def handle_message(update, context):
+    if not update.message: return
+
     user = update.effective_user
     chat = update.effective_chat
     
@@ -160,7 +163,22 @@ async def handle_message(update, context):
     # 🔥 2. WORD SEEK GUESS CHECK 🔥
     await wordseek.handle_word_guess(update, context)
 
-    if not update.message: return
+    # 🔥 3. STICKER REPLY LOGIC (Mimi) 🔥
+    if update.message.sticker:
+        # Logic: Private Chat OR Reply to Bot OR 30% Chance in Groups
+        is_reply = False
+        if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
+            is_reply = True
+            
+        if chat.type == "private" or is_reply or random.random() < 0.3:
+            # Fetch random sticker from saved packs
+            sticker_id = await get_mimi_sticker(context.bot)
+            if sticker_id:
+                try: await update.message.reply_sticker(sticker_id)
+                except: pass
+        return
+
+    # Text Handling
     text = update.message.text if update.message.text else ""
 
     # Update Data
