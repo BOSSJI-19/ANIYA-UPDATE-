@@ -111,6 +111,10 @@ async def callback_handler(update, context):
         await q.message.delete()
         return
 
+if data == "close_ping": # <--- Ye line add karo Ping ke liye
+        await q.message.delete()
+        return
+
     # 2. ADMIN PANEL
     if data.startswith("admin_"):
         await admin.admin_callback(update, context)
