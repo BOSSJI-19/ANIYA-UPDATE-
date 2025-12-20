@@ -50,7 +50,7 @@ async def ping_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     modules_str = " | ".join(modules_list)
     
     # Ping Image (Anime Style)
-    PING_IMG = "https://telegra.ph/file/56d1760224589ee37013e.jpg" 
+    PING_IMG = "https://i.ibb.co/QGGKVnw/image.png" 
     
     caption = f"""╭───〔 🤖 **sʏsᴛᴇᴍ sᴛᴀᴛᴜs** 〕───
 ┆
