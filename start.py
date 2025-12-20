@@ -1,11 +1,10 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
-from database import check_registered
+from database import check_registered, register_user  # 🔥 register_user import kiya
 from config import OWNER_ID
 
 # --- CONFIG ---
-# Tumhari Image ka Direct Link (Yahi link use karna)
 START_IMG = "https://i.ibb.co/WLB2B31/1000007092.png" 
 
 # --- MAIN START COMMAND ---
@@ -14,24 +13,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_name = context.bot.first_name
     bot_username = context.bot.username
 
-    # 1. CHECK REGISTRATION
+    # --- 1. AUTO REGISTRATION LOGIC ---
+    is_new_user = False
+    
+    # Agar user registered nahi hai, to chupchap register kar do
     if not check_registered(user.id):
-        kb = [[InlineKeyboardButton("📝 Register Now (Get ₹500)", callback_data=f"reg_start_{user.id}")]]
-        await update.message.reply_photo(
-            photo=START_IMG,
-            caption=(
-                f"🛑 **Account Not Found!**\n\n"
-                f"Hey **{user.first_name}**! 👋\n"
-                f"Looks like you are new here.\n"
-                f"Join the game to earn money, rob friends & chat with AI!\n\n"
-                f"💰 **Register Bonus:** ₹500 Free!"
-            ),
-            reply_markup=InlineKeyboardMarkup(kb),
-            parse_mode=ParseMode.MARKDOWN
-        )
-        return
+        register_user(user.id, user.first_name)
+        is_new_user = True  # Flag set kiya taaki niche bonus msg bhej sakein
 
-    # 2. REGISTERED USER (MAIN MENU)
+    # --- 2. MAIN MENU (Direct Display) ---
     caption = (
         f"👋 **Hey {user.first_name}!**\n"
         f"I am **{bot_name}** 🤖\n\n"
@@ -57,6 +47,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     ]
 
+    # Main Photo Bhejo
     await update.message.reply_photo(
         photo=START_IMG,
         caption=caption,
@@ -64,7 +55,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# --- CALLBACK HANDLER (MENU LOGIC) ---
+    # --- 3. BONUS MESSAGE (Sirf New Users ke liye) ---
+    if is_new_user:
+        await update.message.reply_text(
+            f"🎉 **Welcome {user.first_name}!**\n"
+            f"✅ Account Created Successfully.\n"
+            f"💰 **You received ₹500 Free Bonus!**",
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+# --- CALLBACK HANDLER (MENU LOGIC - Same as before) ---
 async def start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     data = q.data
@@ -86,7 +86,6 @@ async def start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("➡️ Next Page", callback_data="help_next")],
             [InlineKeyboardButton("🔙 Back Home", callback_data="back_home")]
         ]
-        # Photo wahi rahegi, bas caption aur buttons badlenge
         await q.edit_message_caption(caption=caption, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
     # 2. SUB MENUS
@@ -153,7 +152,6 @@ async def start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 4. BACK HOME
     elif data == "back_home":
-        # Wapis main menu
         caption = (
             f"👋 **Hey {user.first_name}!**\n"
             f"I am **{context.bot.first_name}** 🤖\n\n"
