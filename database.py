@@ -336,6 +336,27 @@ def delete_logger_group():
     """Logger ID delete karega"""
     settings_col.delete_one({"_id": "logger_settings"})
 
+# ... (Purane code ke niche) ...
+
+# 🔥 VOICE KEYS COLLECTIONS (ElevenLabs)
+voice_keys_col = db["voice_keys"]
+
+def add_voice_key(api_key):
+    """ElevenLabs Key Add karega"""
+    if voice_keys_col.find_one({"key": api_key}): return False 
+    voice_keys_col.insert_one({"key": api_key})
+    return True
+
+def remove_voice_key(api_key):
+    """Key Remove karega (Admin ya Auto-Delete)"""
+    result = voice_keys_col.delete_one({"key": api_key})
+    return result.deleted_count > 0
+
+def get_all_voice_keys():
+    """Saari Keys ki list dega"""
+    keys = list(voice_keys_col.find({}, {"_id": 0, "key": 1}))
+    return [k["key"] for k in keys]
+
 # --- 🔥 GLOBAL STATS (For Logger .stats) 🔥 ---
 
 def get_total_users():
