@@ -11,7 +11,6 @@ from database import users_col, codes_col, update_balance, get_balance, check_re
 from ai_chat import get_yuki_response, get_mimi_sticker
 
 # MODULES
-# 🔥 Added 'logger' and 'events' imports
 import admin, start, help, group, leaderboard, pay, bank, bet, wordseek, grouptools, chatstat, logger, events
 
 # 🔥 Import Anti-Spam
@@ -106,12 +105,12 @@ async def callback_handler(update, context):
     data = q.data
     uid = q.from_user.id
     
-    # 🔥 1. LOGGER CLOSE BUTTON (Ye Naya Hai)
+    # 🔥 1. LOGGER CLOSE BUTTONS
     if data == "close_log":
         await q.message.delete()
         return
 
-if data == "close_ping": # <--- Ye line add karo Ping ke liye
+    if data == "close_ping": # Fixed Indentation Here
         await q.message.delete()
         return
 
