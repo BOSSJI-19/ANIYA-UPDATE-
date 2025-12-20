@@ -7,20 +7,39 @@ import random
 
 # Imports
 from config import TELEGRAM_TOKEN
-# 🔥 Note: get_game_keys use kar rahe hain (Chat wali key nahi)
 from database import get_game_keys, update_wordseek_score, get_wordseek_leaderboard
 
 # GAME STATE
 active_games = {}
 
+# --- 🔥 AUTO END JOB (5 Min Timeout) ---
+async def auto_end_job(context: ContextTypes.DEFAULT_TYPE):
+    chat_id = context.job.data
+    
+    # Check agar game abhi bhi chal raha hai
+    if chat_id in active_games:
+        game = active_games[chat_id]
+        target_word = game['target']
+        
+        # Game delete karo
+        del active_games[chat_id]
+        
+        # Message bhejo
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"⏰ **Time's Up!**\n5 minute se koi nahi khel raha tha, isliye game end kar diya.\n\n📝 Correct Word: **{target_word}**",
+            parse_mode=ParseMode.MARKDOWN
+        )
+
 # --- GEMINI HELPER ---
 def get_word_from_gemini():
-    """Gemini se 1 Target Word lata hai using GAME KEYS"""
-    keys = get_game_keys() # 🔥 Only Game Keys
+    """Gemini se 1 Target Word lata hai (Strictly 5 Letters)"""
+    keys = get_game_keys()
     if not keys: return None
 
+    # 🔥 UPDATED PROMPT: Strictly 5 Letters
     prompt = (
-        "Generate 1 random common English word (5 to 6 letters long). "
+        "Generate 1 random common English word (STRICTLY 5 letters long). "
         "Provide the word, its phonetic transcription, and a clear hint (definition). "
         "Output strictly in JSON format: "
         '{"word": "VIDEO", "phonetic": "/ˈvɪd.i.əʊ/", "meaning": "To record using a video camera."}'
@@ -29,11 +48,16 @@ def get_word_from_gemini():
     for key in keys:
         try:
             genai.configure(api_key=key)
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel('gemini-2.5-flash')
             response = model.generate_content(prompt)
             text = response.text.strip()
             if "```json" in text: text = text.replace("```json", "").replace("```", "")
             data = json.loads(text)
+            
+            # 🔥 DOUBLE CHECK: Agar galti se 5 letter nahi hua to skip karo
+            if len(data['word']) != 5:
+                continue
+                
             return data
         except: continue
     return None
@@ -72,17 +96,20 @@ async def start_wordseek(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text("❌ No Game API Keys found! Ask Admin to add keys.")
         return
 
+    # 🔥 5 MINUTE TIMER START (300 Seconds)
+    timer_job = context.job_queue.run_once(auto_end_job, 300, data=chat_id)
+
     active_games[chat_id] = {
         "target": word_data['word'].upper(),
         "data": word_data,
         "guesses": [],
-        "message_id": msg.message_id
+        "message_id": msg.message_id,
+        "timer_job": timer_job # Job store kiya taaki reset kar sakein
     }
     
     length = len(word_data['word'])
     hint = word_data['meaning']
 
-    # 🔥 BLOCK QUOTE ADDED HERE (>)
     text = (
         f"🔥 **WORD GRID CHALLENGE** 🔥\n\n"
         f"🔡 Word Length: **{length} Letters**\n"
@@ -95,6 +122,10 @@ async def start_wordseek(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def stop_wordseek(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if chat_id in active_games:
+        # Timer stop karo
+        job = active_games[chat_id].get("timer_job")
+        if job: job.schedule_removal()
+        
         del active_games[chat_id]
         await update.message.reply_text("🛑 **Game Ended!**")
     else:
@@ -109,11 +140,19 @@ async def handle_word_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target = game['target']
     user_guess = update.message.text.strip().upper()
     
+    # Validation
     if len(user_guess) != len(target): return
 
     if user_guess in game['guesses']:
         await update.message.reply_text("Someone has already guessed your word. Please try another one!", quote=True)
         return
+
+    # 🔥 RESET TIMER ON ACTIVITY
+    # Agar koi guess karta hai to timer wapis 5 min ka ho jayega
+    old_job = game.get("timer_job")
+    if old_job: old_job.schedule_removal()
+    new_job = context.job_queue.run_once(auto_end_job, 300, data=chat.id)
+    game['timer_job'] = new_job
 
     game['guesses'].append(user_guess)
     
@@ -122,6 +161,9 @@ async def handle_word_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = update.effective_user
         points = 9
         update_wordseek_score(user.id, user.first_name, points, str(chat.id))
+        
+        # Stop Timer
+        if new_job: new_job.schedule_removal()
         
         data = game['data']
         del active_games[chat.id]
@@ -143,7 +185,6 @@ async def handle_word_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             grid_text = generate_grid_string(target, game['guesses'])
             hint = game['data']['meaning']
             
-            # 🔥 BLOCK QUOTE ADDED HERE ALSO (>)
             new_text = (
                 f"🔥 **WORD GRID CHALLENGE** 🔥\n\n"
                 f"{grid_text}\n"
