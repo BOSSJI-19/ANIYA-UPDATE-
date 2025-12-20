@@ -308,3 +308,30 @@ def get_total_messages(group_id):
     ]
     result = list(chat_stats_col.aggregate(pipeline))
     return result[0]["total"] if result else 0
+
+# --- 🔥 LOGGER SETTINGS (Re-added for Logger) 🔥 ---
+
+def set_logger_group(group_id):
+    """Logger Group ID save karega"""
+    settings_col.update_one(
+        {"_id": "logger_settings"},
+        {"$set": {"group_id": int(group_id)}},
+        upsert=True
+    )
+
+def get_logger_group():
+    """Logger Group ID layega"""
+    data = settings_col.find_one({"_id": "logger_settings"})
+    return data["group_id"] if data else None
+
+def delete_logger_group():
+    """Logger ID delete karega"""
+    settings_col.delete_one({"_id": "logger_settings"})
+
+# --- 🔥 GLOBAL STATS (For Logger .stats) 🔥 ---
+
+def get_total_users():
+    return users_col.count_documents({})
+
+def get_total_groups():
+    return groups_col.count_documents({})
