@@ -50,7 +50,7 @@ def get_yuki_response(user_id, user_text, user_name):
             genai.configure(api_key=api_key)
             
             # Model Define (Basic)
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel('gemini-2.5-flash')
             
             # Generate
             response = model.generate_content(full_prompt, safety_settings=safety_settings)
