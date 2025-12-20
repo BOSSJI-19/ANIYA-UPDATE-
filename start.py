@@ -1,38 +1,61 @@
+import time
+import psutil
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
-from database import check_registered, register_user  # 🔥 register_user import kiya
-from config import OWNER_ID
+from database import check_registered, register_user
+from config import OWNER_ID, OWNER_NAME # Make sure OWNER_NAME config.py me ho
 
-# --- CONFIG ---
+# --- GLOBAL VARS ---
 START_IMG = "https://i.ibb.co/WLB2B31/1000007092.png" 
+BOT_START_TIME = time.time()
+
+# --- HELPER: GET UPTIME ---
+def get_readable_time():
+    seconds = int(time.time() - BOT_START_TIME)
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    d, h = divmod(h, 24)
+    if d > 0:
+        return f"{d}d:{h}h:{m}m:{s}s"
+    return f"{h}h:{m}m:{s}s"
 
 # --- MAIN START COMMAND ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     bot_name = context.bot.first_name
     bot_username = context.bot.username
-
-    # --- 1. AUTO REGISTRATION LOGIC ---
-    is_new_user = False
     
-    # Agar user registered nahi hai, to chupchap register kar do
+    # --- 1. SYSTEM STATS ---
+    uptime = get_readable_time()
+    cpu = psutil.cpu_percent()
+    ram = psutil.virtual_memory().percent
+    disk = psutil.disk_usage('/').percent
+
+    # --- 2. AUTO REGISTRATION LOGIC ---
+    is_new_user = False
     if not check_registered(user.id):
         register_user(user.id, user.first_name)
-        is_new_user = True  # Flag set kiya taaki niche bonus msg bhej sakein
+        is_new_user = True
 
-    # --- 2. MAIN MENU (Direct Display) ---
-    caption = (
-        f"👋 **Hey {user.first_name}!**\n"
-        f"I am **{bot_name}** 🤖\n\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"🌟 **The Advanced AI & Economy Bot**\n"
-        f"━━━━━━━━━━━━━━━━━━\n\n"
-        f"🎮 **Play Games** | 💰 **Earn Money**\n"
-        f"🔫 **Rob & Kill** | 🗣️ **Chat with AI**\n\n"
-        f"👇 **Click buttons below to explore:**"
-    )
+    # --- 3. STYLISH CAPTION ---
+    # Owner Name Link (Blue Color in Telegram)
+    owner_link = f"[{OWNER_NAME}](tg://user?id={OWNER_ID})"
 
+    caption = f"""┌────── ˹ ɪɴғᴏʀᴍᴀᴛɪᴏɴ ˼─── ⏤‌‌●
+┆◍ ʜєʏ, {user.first_name} 🥀
+┆◍ ɪ ᴧϻ {bot_name}
+└────────────────────•
+ɪ ᴀᴍ ᴛʜᴇ ғᴀsᴛᴇsᴛ ᴀɴᴅ ᴘᴏᴡᴇʀғᴜʟ ᴇᴄᴏɴᴏᴍʏ & ᴀɪ ʙᴏᴛ ᴡɪᴛʜ sᴏᴍᴇ ᴀᴡᴇsᴏᴍᴇ ғᴇᴀᴛᴜʀᴇs.
+
+➥ᴜᴘᴛɪᴍᴇ: `{uptime}`
+➥sᴇʀᴠᴇʀ sᴛᴏʀᴀɢᴇ: `{disk}%`
+➥ᴄᴘᴜ ʟᴏᴀᴅ: `{cpu}%`
+➥ʀᴀᴍ ᴄᴏɴsᴜᴍᴘᴛɪᴏɴ: `{ram}%`
+•──────────────────────•
+✦ᴘᴏᴡєʀєᴅ ʙʏ » {owner_link}"""
+
+    # --- 4. BUTTONS ---
     keyboard = [
         [
             InlineKeyboardButton("💬 Chat AI", callback_data="start_chat_ai"),
@@ -55,7 +78,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
-    # --- 3. BONUS MESSAGE (Sirf New Users ke liye) ---
+    # --- 5. BONUS MESSAGE (Only for New Users) ---
     if is_new_user:
         await update.message.reply_text(
             f"🎉 **Welcome {user.first_name}!**\n"
@@ -152,20 +175,33 @@ async def start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 4. BACK HOME
     elif data == "back_home":
-        caption = (
-            f"👋 **Hey {user.first_name}!**\n"
-            f"I am **{context.bot.first_name}** 🤖\n\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
-            f"🌟 **The Advanced AI & Economy Bot**\n"
-            f"━━━━━━━━━━━━━━━━━━\n\n"
-            f"🎮 **Play Games** | 💰 **Earn Money**\n"
-            f"🔫 **Rob & Kill** | 🗣️ **Chat with AI**\n\n"
-            f"👇 **Click buttons below to explore:**"
-        )
+        # Owner Link Re-calculate for Back Home
+        owner_link = f"[{OWNER_NAME}](tg://user?id={OWNER_ID})"
+        
+        # Stats recalculate (Optional, can keep old values to be fast)
+        uptime = get_readable_time()
+        cpu = psutil.cpu_percent()
+        ram = psutil.virtual_memory().percent
+        disk = psutil.disk_usage('/').percent
+
+        caption = f"""┌────── ˹ ɪɴғᴏʀᴍᴀᴛɪᴏɴ ˼─── ⏤‌‌●
+┆◍ ʜєʏ, {user.first_name} 🥀
+┆◍ ɪ ᴧϻ {context.bot.first_name}
+└────────────────────•
+ɪ ᴀᴍ ᴛʜᴇ ғᴀsᴛᴇsᴛ ᴀɴᴅ ᴘᴏᴡᴇʀғᴜʟ ᴇᴄᴏɴᴏᴍʏ & ᴀɪ ʙᴏᴛ ᴡɪᴛʜ sᴏᴍᴇ ᴀᴡᴇsᴏᴍᴇ ғᴇᴀᴛᴜʀᴇs.
+
+➥ᴜᴘᴛɪᴍᴇ: `{uptime}`
+➥sᴇʀᴠᴇʀ sᴛᴏʀᴀɢᴇ: `{disk}%`
+➥ᴄᴘᴜ ʟᴏᴀᴅ: `{cpu}%`
+➥ʀᴀᴍ ᴄᴏɴsᴜᴍᴘᴛɪᴏɴ: `{ram}%`
+•──────────────────────•
+✦ᴘᴏᴡєʀєᴅ ʙʏ » {owner_link}"""
+
         keyboard = [
-            [InlineKeyboardButton("💬 Chat AI", callback_data="start_chat_ai"), InlineKeyboardButton("🚑 Support", url=f"tg://user?id={OWNER_ID}")],
+            [InlineKeyboardButton("💬 Chat AI", callback_data="start_chat_ai"), InlineKeyboardButton("🚑 Support", url=https://t.me/+N08m5L1mCTU2NTE1")],
             [InlineKeyboardButton("👑 Owner", url=f"tg://user?id={OWNER_ID}"), InlineKeyboardButton("📚 Help & Menu", callback_data="help_main")],
             [InlineKeyboardButton("➕ Add Me To Your Group ➕", url=f"https://t.me/{context.bot.username}?startgroup=true")]
         ]
+        # Use edit_message_media if changing image, else edit_caption
+        # Assuming image is same, just caption update
         await q.edit_message_caption(caption=caption, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
-        
