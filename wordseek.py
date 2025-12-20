@@ -3,16 +3,43 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 import random
 import asyncio
-import traceback # Error trace dekhne ke liye
 
 # Imports
-# (TELEGRAM_TOKEN ki jarurat nahi yahan, hata diya)
 from database import update_wordseek_score, get_wordseek_leaderboard
 
 # GAME STATE
 active_games = {}
 
-# --- 🔥 WORD LIST (OFFLINE DATA) ---
+# --- 🔥 VALID WORDS LIST (Dictionary for Validation) ---
+# Is list me wo words hain jo users guess kar sakte hain.
+# Agar user koi aisa word likhega jo isme nahi hai, to bot mana kar dega.
+VALID_GUESSES = {
+    "APPLE", "TIGER", "BREAD", "CHAIR", "SMILE", "BEACH", "DREAM", "LIGHT", "HEART", "WATCH",
+    "WATER", "MUSIC", "MONEY", "HOUSE", "WORLD", "PHONE", "TABLE", "PAPER", "RIVER", "NIGHT",
+    "HAPPY", "GREEN", "QUICK", "ZEBRA", "CLOUD", "SNAKE", "GHOST", "ROBOT", "PIZZA", "QUEEN",
+    "TRAIN", "FRUIT", "GRAPE", "LEMON", "MELON", "BERRY", "PEACH", "MANGO", "ONION", "SALAD",
+    "SUGAR", "CANDY", "JUICE", "CREAM", "PARTY", "DANCE", "SONGS", "MOVIE", "ACTOR", "DRAMA",
+    "STAGE", "PIANO", "GUITAR", "DRUMS", "FLUTE", "PAINT", "COLOR", "BLACK", "WHITE", "CLOTH",
+    "SHIRT", "SHOES", "PANTS", "DRESS", "SKIRT", "SOCKS", "WATCH", "CLOCK", "ALARM", "TIMER",
+    "HOURS", "MONTH", "YEARS", "TODAY", "NIGHT", "EARLY", "LATER", "NEVER", "WHERE", "THERE",
+    "EVERY", "WHICH", "OTHER", "ABOUT", "THESE", "THOSE", "THEIR", "WOULD", "COULD", "SHALL",
+    "SHOULD", "ABOVE", "BELOW", "UNDER", "SMALL", "LARGE", "HEAVY", "THICK", "SWEET", "SALTY",
+    "BITTER", "FRESH", "CLEAN", "DIRTY", "EMPTY", "QUIET", "NOISY", "YOUNG", "SHARP", "BLUNT",
+    "ROUGH", "SMOOTH", "TIGHT", "LOOSE", "BRAVE", "SMART", "FUNNY", "ANGRY", "LUCKY", "PROUD",
+    "SORRY", "TIRED", "ALIVE", "HUMAN", "CHILD", "WOMAN", "PEOPLE", "FRIEND", "FAMILY", "CROWD",
+    "GROUP", "CLASS", "STAFF", "POWER", "FORCE", "SPEED", "LEVEL", "POINT", "SCORE", "VALUE",
+    "COUNT", "TOTAL", "SHARE", "PRICE", "COSTS", "MONEY", "DOLLAR", "RUPEE", "TRADE", "STOCK",
+    "MARKET", "STORE", "BRAND", "ORDER", "OFFER", "SALES", "SPEND", "SAVED", "BANKS", "LOANS",
+    "VIDEO", "AUDIO", "IMAGE", "PHOTO", "PIXEL", "CLICK", "PRESS", "TOUCH", "INPUT", "MOUSE",
+    "BOARD", "DRIVE", "FILES", "SPACE", "ENTER", "SHIFT", "RESET", "LOGIN", "ADMIN", "USERS",
+    "TIGER", "LION", "ZEBRA", "HORSE", "CAMEL", "SHEEP", "PANDA", "EAGLE", "SHARK", "WHALE",
+    "SNAKE", "MOUSE", "RABBIT", "PUPPY", "KITTY", "BIRDS", "DUCKS", "GEESE", "PLANT", "TREES",
+    "GRASS", "FLOWER", "ROSES", "TULIP", "LEAFY", "ROOTS", "SEEDS", "GROWN", "FARMS", "CROPS",
+    "STORM", "RAINY", "SUNNY", "WINDY", "SNOWY", "FOGGY", "MISTY", "CLEAR", "HUMID", "FROST",
+    "STONE", "STEEL", "METAL", "GLASS", "BRICK", "WOODS", "PLASTIC", "GOLD", "SILVER", "COPPER"
+}
+
+# --- 🔥 TARGET WORDS (With Hints) ---
 WORD_LIST = [
     {"word": "APPLE", "phonetic": "/ˈæp.əl/", "meaning": "A round fruit with red or green skin."},
     {"word": "TIGER", "phonetic": "/ˈtaɪ.ɡər/", "meaning": "A large wild cat with stripes."},
@@ -46,7 +73,11 @@ WORD_LIST = [
     {"word": "QUEEN", "phonetic": "/kwiːn/", "meaning": "Female ruler of a country."}
 ]
 
-# --- 🔥 AUTO END JOB (5 Min Timeout) ---
+# Ensure targets are also in valid guesses
+for w in WORD_LIST:
+    VALID_GUESSES.add(w["word"])
+
+# --- 🔥 AUTO END JOB ---
 async def auto_end_job(context: ContextTypes.DEFAULT_TYPE):
     chat_id = context.job.data
     
@@ -54,6 +85,10 @@ async def auto_end_job(context: ContextTypes.DEFAULT_TYPE):
         game = active_games[chat_id]
         target_word = game['target']
         
+        # Unpin
+        try: await context.bot.unpin_chat_message(chat_id, game['message_id'])
+        except: pass
+
         del active_games[chat_id]
         
         try:
@@ -73,7 +108,6 @@ def generate_grid_string(target, guesses):
         guess = guess.upper()
         row_emoji = ""
         
-        # Wordle Logic
         for i, char in enumerate(guess):
             if char == target[i]:
                 row_emoji += "🟩"
@@ -82,156 +116,175 @@ def generate_grid_string(target, guesses):
             else:
                 row_emoji += "🟥"
         
+        # Formatting: 🟥🟥🟩🟥🟥   S M A I L
         formatted_word = " ".join(list(guess))
-        grid_msg += f"{row_emoji}   `{formatted_word}`\n"
+        grid_msg += f"{row_emoji}    `{formatted_word}`\n"
         
     return grid_msg
 
 # --- COMMANDS ---
 
 async def start_wordseek(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # 🔥 DEBUG: Start Print
-    print("DEBUG: /new command trigger huyi hai!")
+    # Auto Delete Command
+    try: await update.message.delete()
+    except: pass
+
+    chat_id = update.effective_chat.id
     
-    try:
-        chat_id = update.effective_chat.id
-        
-        if chat_id in active_games:
-            await update.message.reply_text("⚠️ Game pehle se chal raha hai! `/end` karo ya guess karo.")
-            return
-
-        # 🔥 DIRECT SELECTION
-        word_data = random.choice(WORD_LIST)
-        
-        # Initial Message
-        msg = await update.message.reply_text("🎮 **Starting Word Challenge...**")
-
-        # Timer Start (5 Mins)
-        # Note: Agar job_queue fail hua to try-except sambhal lega
-        timer_job = None
-        if context.job_queue:
-            timer_job = context.job_queue.run_once(auto_end_job, 300, data=chat_id)
-
-        active_games[chat_id] = {
-            "target": word_data['word'].upper(),
-            "data": word_data,
-            "guesses": [],
-            "message_id": msg.message_id,
-            "timer_job": timer_job 
-        }
-        
-        length = len(word_data['word'])
-        hint = word_data['meaning']
-
-        text = (
-            f"🔥 **WORD GRID CHALLENGE** 🔥\n\n"
-            f"🔡 Word Length: **{length} Letters**\n"
-            f"👇 *Guess the word below!*\n\n"
-            f"> 💡 **Hint:** {hint}"
-        )
-        
-        await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN)
-        print(f"DEBUG: Game Started for {chat_id} with word {word_data['word']}")
-
-    except Exception as e:
-        # 🔥 ERROR CATCHING: Agar kuch fata to ye msg aayega
-        error_msg = f"❌ **Error starting game:**\n`{str(e)}`"
-        print(f"ERROR in start_wordseek: {e}")
-        traceback.print_exc()
-        try:
-            await update.message.reply_text(error_msg, parse_mode=ParseMode.MARKDOWN)
+    if chat_id in active_games:
+        warn = await update.message.reply_text("⚠️ Game pehle se chal raha hai! `/end` karo.")
+        await asyncio.sleep(3)
+        try: await warn.delete()
         except: pass
+        return
+
+    word_data = random.choice(WORD_LIST)
+    
+    msg = await update.message.reply_text("🎮 **Starting Word Challenge...**")
+    
+    # Pin Message
+    try: await msg.pin()
+    except: pass
+
+    timer_job = None
+    if context.job_queue:
+        timer_job = context.job_queue.run_once(auto_end_job, 300, data=chat_id)
+
+    active_games[chat_id] = {
+        "target": word_data['word'].upper(),
+        "data": word_data,
+        "guesses": [],
+        "message_id": msg.message_id,
+        "timer_job": timer_job 
+    }
+    
+    length = len(word_data['word'])
+    hint = word_data['meaning']
+
+    text = (
+        f"🔥 **WORD GRID CHALLENGE** 🔥\n\n"
+        f"🔡 Word Length: **{length} Letters**\n"
+        f"👇 *Guess the word below!*\n\n"
+        f"> 💡 **Hint:** {hint}"
+    )
+    
+    await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN)
 
 async def stop_wordseek(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try: await update.message.delete()
+    except: pass
+
     chat_id = update.effective_chat.id
     if chat_id in active_games:
-        # Stop Timer
-        job = active_games[chat_id].get("timer_job")
+        game = active_games[chat_id]
+        
+        job = game.get("timer_job")
         if job: job.schedule_removal()
+        
+        try: await context.bot.unpin_chat_message(chat_id, game['message_id'])
+        except: pass
         
         del active_games[chat_id]
         await update.message.reply_text("🛑 **Game Ended!**")
     else:
-        await update.message.reply_text("❌ Koi game nahi chal raha.")
+        warn = await update.message.reply_text("❌ Koi game nahi chal raha.")
+        await asyncio.sleep(3)
+        try: await warn.delete()
+        except: pass
 
 # --- GUESS HANDLER ---
 async def handle_word_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        chat = update.effective_chat
-        if chat.id not in active_games: return
-        
-        game = active_games[chat.id]
-        target = game['target']
-        
-        if not update.message or not update.message.text: return
-        user_guess = update.message.text.strip().upper()
-        
-        # Validation
-        if len(user_guess) != len(target): return
+    chat = update.effective_chat
+    if chat.id not in active_games: return
+    
+    game = active_games[chat.id]
+    target = game['target']
+    
+    if not update.message or not update.message.text: return
+    user_guess = update.message.text.strip().upper()
+    
+    # 1. Length Check
+    if len(user_guess) != len(target): return
 
-        if user_guess in game['guesses']:
-            await update.message.reply_text("Someone has already guessed your word. Please try another one!", quote=True)
-            return
+    # 🔥 DELETE USER MESSAGE IMMEDIATELY
+    try: await update.message.delete()
+    except: pass
 
-        # 🔥 RESET TIMER
-        old_job = game.get("timer_job")
-        if old_job: old_job.schedule_removal()
-        
-        new_job = None
-        if context.job_queue:
-            new_job = context.job_queue.run_once(auto_end_job, 300, data=chat.id)
-        game['timer_job'] = new_job
+    # 2. VALID WORD CHECK (English Dictionary Simulation)
+    if user_guess not in VALID_GUESSES:
+        warn = await update.message.reply_text(f"⚠️ **{user_guess}** is not a valid word!", quote=False)
+        await asyncio.sleep(2)
+        try: await warn.delete()
+        except: pass
+        return
 
-        game['guesses'].append(user_guess)
+    # 3. DUPLICATE CHECK
+    if user_guess in game['guesses']:
+        warn = await update.message.reply_text(f"⚠️ **{user_guess}** is already guessed!", quote=False)
+        await asyncio.sleep(2)
+        try: await warn.delete()
+        except: pass
+        return
+
+    # Reset Timer
+    old_job = game.get("timer_job")
+    if old_job: old_job.schedule_removal()
+    new_job = None
+    if context.job_queue:
+        new_job = context.job_queue.run_once(auto_end_job, 300, data=chat.id)
+    game['timer_job'] = new_job
+
+    game['guesses'].append(user_guess)
+    
+    # WIN SCENARIO
+    if user_guess == target:
+        user = update.effective_user
+        points = 9
+        update_wordseek_score(user.id, user.first_name, points, str(chat.id))
         
-        # WIN SCENARIO
-        if user_guess == target:
-            user = update.effective_user
-            points = 9
-            update_wordseek_score(user.id, user.first_name, points, str(chat.id))
+        if new_job: new_job.schedule_removal()
+        try: await context.bot.unpin_chat_message(chat.id, game['message_id'])
+        except: pass
+        
+        data = game['data']
+        del active_games[chat.id]
+        
+        await update.message.reply_text(
+            f"🚬 ~ ` {user.first_name} ` ~ 🍷\n"
+            f"{user_guess.title()}\n\n"
+            f"Congrats! You guessed it correctly.\n"
+            f"Added {points} to the leaderboard.\n"
+            f"Start with /new\n\n"
+            f"> **Correct Word:** {data['word']}\n"
+            f"> **{data['word']}** {data.get('phonetic', '')}\n"
+            f"> **Meaning:** {data['meaning']}",
+            parse_mode=ParseMode.MARKDOWN
+        )
+    else:
+        # WRONG GUESS - UPDATE GRID
+        try:
+            grid_text = generate_grid_string(target, game['guesses'])
+            hint = game['data']['meaning']
             
-            # Stop Timer
-            if new_job: new_job.schedule_removal()
+            new_text = (
+                f"🔥 **WORD GRID CHALLENGE** 🔥\n\n"
+                f"{grid_text}\n"
+                f"> 💡 **Hint:** {hint}"
+            )
             
-            data = game['data']
-            del active_games[chat.id]
-            
-            await update.message.reply_text(
-                f"🚬 ~ ` {user.first_name} ` ~ 🍷\n"
-                f"{user_guess.title()}\n\n"
-                f"Congrats! You guessed it correctly.\n"
-                f"Added {points} to the leaderboard.\n"
-                f"Start with /new\n\n"
-                f"> **Correct Word:** {data['word']}\n"
-                f"> **{data['word']}** {data.get('phonetic', '')}\n"
-                f"> **Meaning:** {data['meaning']}",
+            await context.bot.edit_message_text(
+                chat_id=chat.id,
+                message_id=game['message_id'],
+                text=new_text,
                 parse_mode=ParseMode.MARKDOWN
             )
-        else:
-            # WRONG GUESS - UPDATE GRID
-            try:
-                grid_text = generate_grid_string(target, game['guesses'])
-                hint = game['data']['meaning']
-                
-                new_text = (
-                    f"🔥 **WORD GRID CHALLENGE** 🔥\n\n"
-                    f"{grid_text}\n"
-                    f"> 💡 **Hint:** {hint}"
-                )
-                
-                await context.bot.edit_message_text(
-                    chat_id=chat.id,
-                    message_id=game['message_id'],
-                    text=new_text,
-                    parse_mode=ParseMode.MARKDOWN
-                )
-            except Exception: pass
-            
-    except Exception as e:
-        print(f"ERROR in handle_word_guess: {e}")
+        except: pass
 
 # --- LEADERBOARD ---
 async def wordseek_rank(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try: await update.message.delete()
+    except: pass
+    
     kb = [[InlineKeyboardButton("🌍 Global Top", callback_data="wrank_global"), InlineKeyboardButton("👥 Group Top", callback_data="wrank_group")]]
     await update.message.reply_text("🏆 **WordSeek Leaderboard**\nSelect Category 👇", reply_markup=InlineKeyboardMarkup(kb))
 
