@@ -3,16 +3,16 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 import random
 import asyncio
+import traceback # Error trace dekhne ke liye
 
 # Imports
-from config import TELEGRAM_TOKEN
+# (TELEGRAM_TOKEN ki jarurat nahi yahan, hata diya)
 from database import update_wordseek_score, get_wordseek_leaderboard
 
 # GAME STATE
 active_games = {}
 
 # --- 🔥 WORD LIST (OFFLINE DATA) ---
-# Strictly 5-Letter Words
 WORD_LIST = [
     {"word": "APPLE", "phonetic": "/ˈæp.əl/", "meaning": "A round fruit with red or green skin."},
     {"word": "TIGER", "phonetic": "/ˈtaɪ.ɡər/", "meaning": "A large wild cat with stripes."},
@@ -56,11 +56,13 @@ async def auto_end_job(context: ContextTypes.DEFAULT_TYPE):
         
         del active_games[chat_id]
         
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=f"⏰ **Time's Up!**\nGame end kar diya gaya.\n\n📝 Correct Word: **{target_word}**",
-            parse_mode=ParseMode.MARKDOWN
-        )
+        try:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"⏰ **Time's Up!**\nGame end kar diya gaya.\n\n📝 Correct Word: **{target_word}**",
+                parse_mode=ParseMode.MARKDOWN
+            )
+        except: pass
 
 # --- HELPER: GENERATE GRID ---
 def generate_grid_string(target, guesses):
@@ -88,39 +90,57 @@ def generate_grid_string(target, guesses):
 # --- COMMANDS ---
 
 async def start_wordseek(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
+    # 🔥 DEBUG: Start Print
+    print("DEBUG: /new command trigger huyi hai!")
     
-    if chat_id in active_games:
-        await update.message.reply_text("⚠️ Game pehle se chal raha hai! `/end` karo ya guess karo.")
-        return
+    try:
+        chat_id = update.effective_chat.id
+        
+        if chat_id in active_games:
+            await update.message.reply_text("⚠️ Game pehle se chal raha hai! `/end` karo ya guess karo.")
+            return
 
-    # 🔥 DIRECT SELECTION (NO LOADING)
-    word_data = random.choice(WORD_LIST)
+        # 🔥 DIRECT SELECTION
+        word_data = random.choice(WORD_LIST)
+        
+        # Initial Message
+        msg = await update.message.reply_text("🎮 **Starting Word Challenge...**")
 
-    # Timer Start (5 Mins)
-    timer_job = context.job_queue.run_once(auto_end_job, 300, data=chat_id)
+        # Timer Start (5 Mins)
+        # Note: Agar job_queue fail hua to try-except sambhal lega
+        timer_job = None
+        if context.job_queue:
+            timer_job = context.job_queue.run_once(auto_end_job, 300, data=chat_id)
 
-    msg = await update.message.reply_text("🎮 **Starting Word Challenge...**")
+        active_games[chat_id] = {
+            "target": word_data['word'].upper(),
+            "data": word_data,
+            "guesses": [],
+            "message_id": msg.message_id,
+            "timer_job": timer_job 
+        }
+        
+        length = len(word_data['word'])
+        hint = word_data['meaning']
 
-    active_games[chat_id] = {
-        "target": word_data['word'].upper(),
-        "data": word_data,
-        "guesses": [],
-        "message_id": msg.message_id,
-        "timer_job": timer_job 
-    }
-    
-    length = len(word_data['word'])
-    hint = word_data['meaning']
+        text = (
+            f"🔥 **WORD GRID CHALLENGE** 🔥\n\n"
+            f"🔡 Word Length: **{length} Letters**\n"
+            f"👇 *Guess the word below!*\n\n"
+            f"> 💡 **Hint:** {hint}"
+        )
+        
+        await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN)
+        print(f"DEBUG: Game Started for {chat_id} with word {word_data['word']}")
 
-    text = (
-        f"🔥 **WORD GRID CHALLENGE** 🔥\n\n"
-        f"🔡 Word Length: **{length} Letters**\n"
-        f"👇 *Guess the word below!*\n\n"
-        f"> 💡 **Hint:** {hint}"
-    )
-    
-    await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN)
+    except Exception as e:
+        # 🔥 ERROR CATCHING: Agar kuch fata to ye msg aayega
+        error_msg = f"❌ **Error starting game:**\n`{str(e)}`"
+        print(f"ERROR in start_wordseek: {e}")
+        traceback.print_exc()
+        try:
+            await update.message.reply_text(error_msg, parse_mode=ParseMode.MARKDOWN)
+        except: pass
 
 async def stop_wordseek(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -136,70 +156,79 @@ async def stop_wordseek(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- GUESS HANDLER ---
 async def handle_word_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    if chat.id not in active_games: return
-    
-    game = active_games[chat.id]
-    target = game['target']
-    user_guess = update.message.text.strip().upper()
-    
-    # Validation
-    if len(user_guess) != len(target): return
-
-    if user_guess in game['guesses']:
-        await update.message.reply_text("Someone has already guessed your word. Please try another one!", quote=True)
-        return
-
-    # 🔥 RESET TIMER
-    old_job = game.get("timer_job")
-    if old_job: old_job.schedule_removal()
-    new_job = context.job_queue.run_once(auto_end_job, 300, data=chat.id)
-    game['timer_job'] = new_job
-
-    game['guesses'].append(user_guess)
-    
-    # WIN SCENARIO
-    if user_guess == target:
-        user = update.effective_user
-        points = 9
-        update_wordseek_score(user.id, user.first_name, points, str(chat.id))
+    try:
+        chat = update.effective_chat
+        if chat.id not in active_games: return
         
-        # Stop Timer
-        if new_job: new_job.schedule_removal()
+        game = active_games[chat.id]
+        target = game['target']
         
-        data = game['data']
-        del active_games[chat.id]
+        if not update.message or not update.message.text: return
+        user_guess = update.message.text.strip().upper()
         
-        await update.message.reply_text(
-            f"🚬 ~ ` {user.first_name} ` ~ 🍷\n"
-            f"{user_guess.title()}\n\n"
-            f"Congrats! You guessed it correctly.\n"
-            f"Added {points} to the leaderboard.\n"
-            f"Start with /new\n\n"
-            f"> **Correct Word:** {data['word']}\n"
-            f"> **{data['word']}** {data.get('phonetic', '')}\n"
-            f"> **Meaning:** {data['meaning']}",
-            parse_mode=ParseMode.MARKDOWN
-        )
-    else:
-        # WRONG GUESS - UPDATE GRID
-        try:
-            grid_text = generate_grid_string(target, game['guesses'])
-            hint = game['data']['meaning']
+        # Validation
+        if len(user_guess) != len(target): return
+
+        if user_guess in game['guesses']:
+            await update.message.reply_text("Someone has already guessed your word. Please try another one!", quote=True)
+            return
+
+        # 🔥 RESET TIMER
+        old_job = game.get("timer_job")
+        if old_job: old_job.schedule_removal()
+        
+        new_job = None
+        if context.job_queue:
+            new_job = context.job_queue.run_once(auto_end_job, 300, data=chat.id)
+        game['timer_job'] = new_job
+
+        game['guesses'].append(user_guess)
+        
+        # WIN SCENARIO
+        if user_guess == target:
+            user = update.effective_user
+            points = 9
+            update_wordseek_score(user.id, user.first_name, points, str(chat.id))
             
-            new_text = (
-                f"🔥 **WORD GRID CHALLENGE** 🔥\n\n"
-                f"{grid_text}\n"
-                f"> 💡 **Hint:** {hint}"
-            )
+            # Stop Timer
+            if new_job: new_job.schedule_removal()
             
-            await context.bot.edit_message_text(
-                chat_id=chat.id,
-                message_id=game['message_id'],
-                text=new_text,
+            data = game['data']
+            del active_games[chat.id]
+            
+            await update.message.reply_text(
+                f"🚬 ~ ` {user.first_name} ` ~ 🍷\n"
+                f"{user_guess.title()}\n\n"
+                f"Congrats! You guessed it correctly.\n"
+                f"Added {points} to the leaderboard.\n"
+                f"Start with /new\n\n"
+                f"> **Correct Word:** {data['word']}\n"
+                f"> **{data['word']}** {data.get('phonetic', '')}\n"
+                f"> **Meaning:** {data['meaning']}",
                 parse_mode=ParseMode.MARKDOWN
             )
-        except Exception: pass
+        else:
+            # WRONG GUESS - UPDATE GRID
+            try:
+                grid_text = generate_grid_string(target, game['guesses'])
+                hint = game['data']['meaning']
+                
+                new_text = (
+                    f"🔥 **WORD GRID CHALLENGE** 🔥\n\n"
+                    f"{grid_text}\n"
+                    f"> 💡 **Hint:** {hint}"
+                )
+                
+                await context.bot.edit_message_text(
+                    chat_id=chat.id,
+                    message_id=game['message_id'],
+                    text=new_text,
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            except Exception: pass
+            
+    except Exception as e:
+        print(f"ERROR in handle_word_guess: {e}")
 
 # --- LEADERBOARD ---
 async def wordseek_rank(update: Update, context: ContextTypes.DEFAULT_TYPE):
