@@ -16,20 +16,20 @@ def to_fancy(text):
     mapping = {'A': 'Λ', 'E': 'Є', 'S': 'δ', 'O': 'σ', 'T': 'ᴛ', 'N': 'ɴ', 'M': 'ᴍ', 'U': 'ᴜ', 'R': 'ʀ', 'D': 'ᴅ', 'C': 'ᴄ', 'P': 'ᴘ', 'G': 'ɢ', 'B': 'ʙ', 'L': 'ʟ', 'W': 'ᴡ', 'K': 'ᴋ', 'J': 'ᴊ', 'Y': 'ʏ', 'I': 'ɪ', 'H': 'ʜ'}
     return "".join(mapping.get(c.upper(), c) for c in text)
 
-# --- 🔥 NEW /bal COMMAND ---
+# --- 1. CHECK BALANCE (/bal) ---
 async def check_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Shows User Profile, Rank, Status & Balance"""
     user = update.effective_user
     uid = user.id
     
-    # 1. Fetch Data
+    # Fetch Data
     wallet = get_balance(uid)
     bank = get_bank_balance(uid)
     total_amt = wallet + bank
     user_db = get_user(uid)
     kills = user_db.get("kills", 0) if user_db else 0
     
-    # 2. Determine Status
+    # Determine Status
     if is_dead(uid):
         status = "💀 DEAD"
     elif is_protected(uid):
@@ -37,10 +37,9 @@ async def check_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         status = "👤 ALIVE"
 
-    # 3. Calculate Global Rank (Based on Wallet Balance)
+    # Calculate Rank
     rank = users_col.count_documents({"balance": {"$gt": wallet}}) + 1
 
-    # 4. Message Formatting
     msg = f"""
 <blockquote><b>👤 {to_fancy("USER PROFILE")}</b></blockquote>
 
@@ -59,12 +58,12 @@ async def check_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
 """
     await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
 
-# --- OLD COMMANDS ---
-
+# --- 2. BANK INFO (/bank) - Fix for AttributeError ---
 async def bank_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Ye purana command hai, bas fallback ke liye rakha hai
+    """Alias for check_balance to fix main.py error"""
     await check_balance(update, context)
 
+# --- 3. DEPOSIT ---
 async def deposit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     wallet = get_balance(user.id)
@@ -88,6 +87,7 @@ async def deposit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = f"<blockquote><b>✅ {to_fancy('DEPOSIT SUCCESS')}</b></blockquote>\n<blockquote><b>💰 ᴅᴇᴘᴏsɪᴛᴇᴅ :</b> ₹{amount}\n<b>💎 ɴᴇᴡ ʙᴀʟᴀɴᴄᴇ :</b> ₹{new_bank}</blockquote>"
     await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
 
+# --- 4. WITHDRAW ---
 async def withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     bank = get_bank_balance(user.id)
@@ -111,6 +111,7 @@ async def withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = f"<blockquote><b>✅ {to_fancy('WITHDRAW SUCCESS')}</b></blockquote>\n<blockquote><b>💸 ᴡɪᴛʜᴅʀᴇᴡ :</b> ₹{amount}\n<b>👛 ɴᴇᴡ ᴡᴀʟʟᴇᴛ :</b> ₹{new_wallet}</blockquote>"
     await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
 
+# --- 5. LOAN ---
 async def take_loan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     current_loan = get_loan(user.id)
@@ -130,6 +131,7 @@ async def take_loan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = f"<blockquote><b>💸 {to_fancy('LOAN APPROVED')}</b></blockquote>\n<blockquote><b>💰 ᴀᴍᴏᴜɴᴛ :</b> ₹{amount}\n<b>⚠️ ɴᴏᴛᴇ :</b> Repay this soon!</blockquote>"
     await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
 
+# --- 6. REPAY LOAN ---
 async def repay_loan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     debt = get_loan(user.id)
