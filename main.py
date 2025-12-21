@@ -102,16 +102,17 @@ async def shop_menu(update, context):
 # --- CALLBACK HANDLER ---
 async def callback_handler(update, context):
     q = update.callback_query
+    await q.answer()  # 🔥 MUST (very important)
+
     data = q.data
     uid = q.from_user.id
-    
-    # 🔥 1. LOGGER CLOSE BUTTONS
-    if data == "close_log":
-        await q.message.delete()
-        return
 
-    if data == "close_ping": # Fixed Indentation Here
-        await q.message.delete()
+    # 🔥 1. GLOBAL CLOSE BUTTONS (TOP PRIORITY)
+    if data.startswith("close_"):
+        try:
+            await q.message.delete()
+        except:
+            pass
         return
 
     # 2. ADMIN PANEL
