@@ -1,4 +1,5 @@
 import random
+import html
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
@@ -15,6 +16,11 @@ BOMB_CONFIG = {
     10: [2.50, 4.50, 9.00, 18.0, 40.0, 80.0]                                   
 }
 
+# Fancy Font Helper
+def to_fancy(text):
+    mapping = {'A': 'Λ', 'E': 'Є', 'S': 'δ', 'O': 'σ', 'T': 'ᴛ', 'N': 'ɴ', 'M': 'ᴍ', 'U': 'ᴜ', 'R': 'ʀ', 'D': 'ᴅ', 'C': 'ᴄ', 'P': 'ᴘ', 'G': 'ɢ', 'B': 'ʙ', 'L': 'ʟ', 'W': 'ᴡ', 'K': 'ᴋ', 'J': 'ᴊ', 'Y': 'ʏ'}
+    return "".join(mapping.get(c.upper(), c) for c in text)
+
 # --- HELPER: AUTO DELETE ---
 async def delete_msg(context: ContextTypes.DEFAULT_TYPE):
     try: await context.bot.delete_message(context.job.chat_id, context.job.data)
@@ -25,19 +31,18 @@ async def bet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = update.effective_chat.id
     
-    # 1. DELETE USER COMMAND (Safayi ke liye)
+    # 1. DELETE USER COMMAND
     try: await update.message.delete()
     except: pass 
 
     # 2. Register Check
     if not check_registered(user.id):
         kb = [[InlineKeyboardButton("📝 Register", callback_data=f"reg_start_{user.id}")]]
-        # Hum 'send_message' use karenge taaki deleted msg pe reply karne ka error na aaye
         msg = await context.bot.send_message(
             chat_id=chat_id,
-            text=f"🛑 **{user.first_name}, Register First!**", 
+            text=f"🛑 <b>{html.escape(user.first_name)}, Register First!</b>", 
             reply_markup=InlineKeyboardMarkup(kb),
-            parse_mode=ParseMode.MARKDOWN
+            parse_mode=ParseMode.HTML
         )
         context.job_queue.run_once(delete_msg, 10, chat_id=chat_id, data=msg.message_id)
         return
@@ -45,18 +50,18 @@ async def bet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 3. Argument Check
     try: bet_amount = int(context.args[0])
     except: 
-        msg = await context.bot.send_message(chat_id=chat_id, text="⚠️ **Format:** `/bet 100`", parse_mode=ParseMode.MARKDOWN)
+        msg = await context.bot.send_message(chat_id=chat_id, text="⚠️ <b>Format:</b> <code>/bet 100</code>", parse_mode=ParseMode.HTML)
         context.job_queue.run_once(delete_msg, 5, chat_id=chat_id, data=msg.message_id)
         return
         
     # 4. Balance Check
     if get_balance(user.id) < bet_amount: 
-        msg = await context.bot.send_message(chat_id=chat_id, text=f"❌ **Low Balance!** {user.first_name}, paisa nahi hai.", parse_mode=ParseMode.MARKDOWN)
+        msg = await context.bot.send_message(chat_id=chat_id, text=f"❌ <b>Low Balance!</b> {html.escape(user.first_name)}, insufficient funds.", parse_mode=ParseMode.HTML)
         context.job_queue.run_once(delete_msg, 5, chat_id=chat_id, data=msg.message_id)
         return
     
     if bet_amount < 10:
-        msg = await context.bot.send_message(chat_id=chat_id, text="❌ Minimum Bet ₹10 hai!")
+        msg = await context.bot.send_message(chat_id=chat_id, text="❌ Minimum Bet is ₹10!", parse_mode=ParseMode.HTML)
         context.job_queue.run_once(delete_msg, 5, chat_id=chat_id, data=msg.message_id)
         return
 
@@ -67,17 +72,20 @@ async def bet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("❌ Cancel", callback_data=f"close_{user.id}")]
     ]
     
-    # 🔥 New formatted message
+    msg_text = f"""
+<blockquote><b>🎲 {to_fancy("NEW BET STARTED")}</b></blockquote>
+
+<blockquote>
+<b>👤 ᴘʟᴀʏᴇʀ :</b> {html.escape(user.first_name)}
+<b>💵 ᴀᴍᴏᴜɴᴛ :</b> ₹{bet_amount}
+<b>💣 ᴄʜᴏᴏsᴇ ᴅɪғғɪᴄᴜʟᴛʏ :</b> 👇
+</blockquote>
+"""
     await context.bot.send_message(
         chat_id=chat_id,
-        text=(
-            f"🎲 **NEW BET STARTED**\n"
-            f"👤 **Player:** {user.first_name}\n"
-            f"💵 **Amount:** ₹{bet_amount}\n"
-            f"💣 **Choose Difficulty:** 👇"
-        ),
+        text=msg_text,
         reply_markup=InlineKeyboardMarkup(kb), 
-        parse_mode=ParseMode.MARKDOWN
+        parse_mode=ParseMode.HTML
     )
 
 # --- CALLBACK HANDLER ---
@@ -94,11 +102,11 @@ async def bet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         owner = int(parts[2])
 
         if uid != owner:
-            await q.answer("Ye button tumhare liye nahi hai!", show_alert=True)
+            await q.answer("This button is not for you!", show_alert=True)
             return
 
         if get_balance(owner) < bet_amount:
-            await q.answer("Balance khatam ho gaya!", show_alert=True)
+            await q.answer("Insufficient balance!", show_alert=True)
             return
 
         kb = [
@@ -107,29 +115,29 @@ async def bet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("❌ Cancel", callback_data=f"close_{owner}")]
         ]
         
-        await q.edit_message_text(
-            text=(
-                f"🎲 **NEW BET STARTED**\n"
-                f"👤 **Player:** {q.from_user.first_name}\n"
-                f"💵 **Amount:** ₹{bet_amount}\n"
-                f"💣 **Choose Difficulty:** 👇"
-            ),
-            reply_markup=InlineKeyboardMarkup(kb), 
-            parse_mode=ParseMode.MARKDOWN
-        )
+        msg_text = f"""
+<blockquote><b>🎲 {to_fancy("NEW BET STARTED")}</b></blockquote>
+
+<blockquote>
+<b>👤 ᴘʟᴀʏᴇʀ :</b> {html.escape(q.from_user.first_name)}
+<b>💵 ᴀᴍᴏᴜɴᴛ :</b> ₹{bet_amount}
+<b>💣 ᴄʜᴏᴏsᴇ ᴅɪғғɪᴄᴜʟᴛʏ :</b> 👇
+</blockquote>
+"""
+        await q.edit_message_text(text=msg_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
         return
 
     # --- GAME SETUP (Set Difficulty) ---
     if act == "set":
         owner = int(parts[3])
         if uid != owner:
-            await q.answer("Ye game tumhara nahi hai!", show_alert=True)
+            await q.answer("This is not your game!", show_alert=True)
             return
             
         mines = int(parts[1]); bet = int(parts[2])
         
         if get_balance(owner) < bet: 
-            await q.answer("Balance khatam ho gaya!", show_alert=True)
+            await q.answer("Insufficient balance!", show_alert=True)
             await q.message.delete()
             return
             
@@ -146,25 +154,23 @@ async def bet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for c in range(4): row.append(InlineKeyboardButton("🟦", callback_data=f"clk_{r*4+c}_{owner}"))
             kb.append(row)
             
-        # 🔥 Updated Game Info Message
-        await q.edit_message_text(
-            text=(
-                f"🎮 **GAME STARTED**\n"
-                f"👤 **Player:** {q.from_user.first_name}\n"
-                f"💰 **Bet:** ₹{bet}\n"
-                f"💣 **Mines:** {mines}\n"
-                f"➖➖➖➖➖➖➖➖"
-            ),
-            reply_markup=InlineKeyboardMarkup(kb),
-            parse_mode=ParseMode.MARKDOWN
-        )
+        msg_text = f"""
+<blockquote><b>🎮 {to_fancy("GAME STARTED")}</b></blockquote>
+
+<blockquote>
+<b>👤 ᴘʟᴀʏᴇʀ :</b> {html.escape(q.from_user.first_name)}
+<b>💰 ʙᴇᴛ :</b> ₹{bet}
+<b>💣 ᴍɪɴᴇs :</b> {mines}
+</blockquote>
+"""
+        await q.edit_message_text(text=msg_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
         return
 
     # --- GAME CLICK ---
     if act == "clk":
         owner = int(parts[2])
         if uid != owner:
-            await q.answer("Apna game khelo!", show_alert=True)
+            await q.answer("Play your own game!", show_alert=True)
             return
             
         game = active_games.get(f"{owner}")
@@ -176,7 +182,7 @@ async def bet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         idx = int(parts[1])
         
         if idx in game["rev"]:
-            await q.answer("Already Open Hai!", show_alert=False)
+            await q.answer("Already Opened!", show_alert=False)
             return
 
         # 🔥 BOMB LOGIC (LOSS) 🔥
@@ -197,16 +203,16 @@ async def bet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             kb.append([InlineKeyboardButton("🔄 New Game", callback_data=f"rebet_{game['bet']}_{owner}")])
             
-            await q.edit_message_text(
-                text=(
-                    f"💥 **BOOM! GAME OVER**\n"
-                    f"👤 **Player:** {update.effective_user.first_name}\n"
-                    f"💣 **Mines:** {game['mines']}\n"
-                    f"📉 **Lost:** ₹{game['bet']}"
-                ),
-                reply_markup=InlineKeyboardMarkup(kb),
-                parse_mode=ParseMode.MARKDOWN
-            )
+            msg_text = f"""
+<blockquote><b>💥 {to_fancy("BOOM! GAME OVER")}</b></blockquote>
+
+<blockquote>
+<b>👤 ᴘʟᴀʏᴇʀ :</b> {html.escape(update.effective_user.first_name)}
+<b>💣 ᴍɪɴᴇs :</b> {game['mines']}
+<b>📉 ʟᴏsᴛ :</b> ₹{game['bet']}
+</blockquote>
+"""
+            await q.edit_message_text(text=msg_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
         
         # SAFE LOGIC
         else:
@@ -232,16 +238,16 @@ async def bet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 kb.append([InlineKeyboardButton("🔄 New Game", callback_data=f"rebet_{game['bet']}_{owner}")])
                 
-                await q.edit_message_text(
-                    text=(
-                        f"👑 **JACKPOT! YOU WON**\n"
-                        f"👤 **Player:** {update.effective_user.first_name}\n"
-                        f"💣 **Mines:** {game['mines']}\n"
-                        f"💰 **Won:** ₹{win}"
-                    ),
-                    reply_markup=InlineKeyboardMarkup(kb),
-                    parse_mode=ParseMode.MARKDOWN
-                )
+                msg_text = f"""
+<blockquote><b>👑 {to_fancy("JACKPOT! YOU WON")}</b></blockquote>
+
+<blockquote>
+<b>👤 ᴘʟᴀʏᴇʀ :</b> {html.escape(update.effective_user.first_name)}
+<b>💣 ᴍɪɴᴇs :</b> {game['mines']}
+<b>💰 ᴡᴏɴ :</b> ₹{win}
+</blockquote>
+"""
+                await q.edit_message_text(text=msg_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
             else:
                 # CONTINUE GAME
                 kb = []
@@ -259,28 +265,28 @@ async def bet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 win_now = int(game["bet"] * mults[len(game["rev"])-1])
                 kb.append([InlineKeyboardButton(f"💰 Cashout ₹{win_now}", callback_data=f"cash_{owner}")])
                 
-                await q.edit_message_text(
-                    text=(
-                        f"💎 **SAFE! KEEP GOING**\n"
-                        f"👤 {update.effective_user.first_name}\n"
-                        f"💰 Profit: ₹{win_now}\n"
-                        f"💣 Mines: {game['mines']}"
-                    ),
-                    reply_markup=InlineKeyboardMarkup(kb),
-                    parse_mode=ParseMode.MARKDOWN
-                )
+                msg_text = f"""
+<blockquote><b>💎 {to_fancy("SAFE! KEEP GOING")}</b></blockquote>
+
+<blockquote>
+<b>👤 ᴘʟᴀʏᴇʀ :</b> {html.escape(update.effective_user.first_name)}
+<b>💰 ᴘʀᴏғɪᴛ :</b> ₹{win_now}
+<b>💣 ᴍɪɴᴇs :</b> {game['mines']}
+</blockquote>
+"""
+                await q.edit_message_text(text=msg_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
         return
 
     # --- CASHOUT ---
     if act == "cash":
         owner = int(parts[1])
         if uid != owner:
-            await q.answer("Haath mat lagana!", show_alert=True)
+            await q.answer("Don't touch this!", show_alert=True)
             return
             
         game = active_games.get(f"{owner}")
         if not game:
-            await q.answer("Game Khatam!", show_alert=True)
+            await q.answer("Game Ended!", show_alert=True)
             await q.message.delete()
             return
             
@@ -304,22 +310,21 @@ async def bet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         kb.append([InlineKeyboardButton("🔄 New Game", callback_data=f"rebet_{bet_amount}_{owner}")])
         
-        await q.edit_message_text(
-            text=(
-                f"💰 **CASHED OUT SUCCESS**\n"
-                f"👤 **Player:** {update.effective_user.first_name}\n"
-                f"💣 **Mines:** {game['mines']}\n"
-                f"💵 **Profit:** ₹{win}"
-            ),
-            reply_markup=InlineKeyboardMarkup(kb),
-            parse_mode=ParseMode.MARKDOWN
-        )
+        msg_text = f"""
+<blockquote><b>💰 {to_fancy("CASHED OUT SUCCESS")}</b></blockquote>
+
+<blockquote>
+<b>👤 ᴘʟᴀʏᴇʀ :</b> {html.escape(update.effective_user.first_name)}
+<b>💣 ᴍɪɴᴇs :</b> {game['mines']}
+<b>💵 ᴘʀᴏғɪᴛ :</b> ₹{win}
+</blockquote>
+"""
+        await q.edit_message_text(text=msg_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
 
     # --- CLOSE ---
     if act == "close": 
         owner = int(parts[1])
-        if uid != owner: await q.answer("Tum close nahi kar sakte!"); return
+        if uid != owner: await q.answer("You cannot close this!"); return
         await q.message.delete()
         
-    if act == "noop": await q.answer("Game Over ho gaya bhai!", show_alert=False)
-        
+    if act == "noop": await q.answer("Game Over!", show_alert=False)
