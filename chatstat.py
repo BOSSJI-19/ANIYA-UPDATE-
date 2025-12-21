@@ -1,3 +1,4 @@
+import html
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
@@ -34,26 +35,36 @@ async def send_rank_message(chat_id, mode, update, context):
         "week": "🗓 WEEKLY TOP CHATTERS"
     }
 
-    text = f"📈 **{title_map[mode]}**\n\n"
+    # 1. HEADER (Title Block)
+    text = f"<blockquote><b>📈 {title_map[mode]}</b></blockquote>\n\n"
     
+    # 2. BODY (List Block)
+    body_text = ""
     if not data:
-        text += "❌ **No data found yet!**\nStart chatting to appear here."
+        body_text += "❌ <b>No data found yet!</b>\nStart chatting to appear here."
     else:
         max_count = data[0].get(mode, 1)
         for i, user in enumerate(data, 1):
-            name = user.get("name", "Unknown")
+            # Name ko safe karo (HTML tags issue na karein)
+            name = html.escape(user.get("name", "Unknown"))
             count = user.get(mode, 0)
             bar = make_bar(count, max_count)
+            
             if i == 1: icon = "🥇"
             elif i == 2: icon = "🥈"
             elif i == 3: icon = "🥉"
             else: icon = f"{i}."
-            text += f"{icon} 👤 **{name}**\n"
-            text += f"   └ {bar} • `{count}`\n\n"
+            
+            # HTML Formatting
+            body_text += f"{icon} 👤 <b>{name}</b>\n"
+            body_text += f"   └ {bar} • <code>{count}</code>\n\n"
     
-    text += f"📨 **Total Group Messages:** `{total}`"
+    # Body ko Blockquote me daalo
+    text += f"<blockquote>{body_text}</blockquote>\n"
     
-    # 🔥 CHANGED: 'close_rank' -> 'hide_rank'
+    # 3. FOOTER
+    text += f"📨 <b>Total Group Messages:</b> <code>{total}</code>"
+    
     kb = [
         [
             InlineKeyboardButton("Overall", callback_data="rank_overall"),
@@ -68,7 +79,7 @@ async def send_rank_message(chat_id, mode, update, context):
             await update.callback_query.message.edit_text(
                 text=text,
                 reply_markup=InlineKeyboardMarkup(kb),
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.HTML  # 🔥 HTML Mode Zaroori Hai
             )
         except: pass 
     else:
@@ -76,7 +87,7 @@ async def send_rank_message(chat_id, mode, update, context):
             chat_id=chat_id,
             text=text,
             reply_markup=InlineKeyboardMarkup(kb),
-            parse_mode=ParseMode.MARKDOWN
+            parse_mode=ParseMode.HTML  # 🔥 HTML Mode Zaroori Hai
         )
 
 # --- CALLBACK HANDLER ---
@@ -84,7 +95,6 @@ async def rank_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     data = q.data
     
-    # 🔥 FIXED: Catch 'hide_rank' instead of 'close_rank'
     if data == "hide_rank":
         try:
             await q.answer("Closing...")
