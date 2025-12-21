@@ -17,8 +17,8 @@ from database import (
 from ai_chat import get_yuki_response, get_mimi_sticker
 from tts import generate_voice 
 
-# MODULES (Added tictactoe here)
-import admin, start, help, group, leaderboard, pay, bet, wordseek, grouptools, chatstat, logger, events, info, tictactoe
+# MODULES (Added couple here)
+import admin, start, help, group, leaderboard, pay, bet, wordseek, grouptools, chatstat, logger, events, info, tictactoe, couple
 
 # 🔥 Bank Updated Import
 import bank 
@@ -144,7 +144,7 @@ async def callback_handler(update, context):
         await bet.bet_callback(update, context)
         return
 
-    # 8. TIC TAC TOE (ZERO CUTS) 🔥
+    # 8. TIC TAC TOE (ZERO CUTS)
     if data.startswith("ttt_"):
         await tictactoe.ttt_callback(update, context)
         return
@@ -257,6 +257,7 @@ def main():
     app.add_handler(CommandHandler("info", info.user_info))
     app.add_handler(CommandHandler("love", info.love_calculator))
     app.add_handler(CommandHandler("stupid", info.stupid_meter))
+    app.add_handler(CommandHandler("couple", couple.couple_check)) # 🔥 Added Couple Command
     
     # Economy
     app.add_handler(CommandHandler("bal", check_balance))
@@ -272,7 +273,7 @@ def main():
     # Games & Market
     app.add_handler(CommandHandler("bet", bet.bet_menu))
     app.add_handler(CommandHandler("new", wordseek.start_wordseek))
-    app.add_handler(CommandHandler("zero", tictactoe.start_ttt)) # 🔥 New Tic Tac Toe
+    app.add_handler(CommandHandler("zero", tictactoe.start_ttt))
     app.add_handler(CommandHandler("market", group.market_info))
     app.add_handler(CommandHandler("invest", group.invest))
     app.add_handler(CommandHandler("sell", group.sell_shares))
@@ -298,7 +299,6 @@ def main():
     # Event Handlers (Join/Leave/VC)
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, events.welcome_user))
     app.add_handler(MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, events.track_leave))
-    # 🔥 New VC Handlers
     app.add_handler(MessageHandler(filters.StatusUpdate.VIDEO_CHAT_STARTED, events.vc_handler))
     app.add_handler(MessageHandler(filters.StatusUpdate.VIDEO_CHAT_ENDED, events.vc_handler))
     app.add_handler(MessageHandler(filters.StatusUpdate.VIDEO_CHAT_PARTICIPANTS_INVITED, events.vc_handler))
