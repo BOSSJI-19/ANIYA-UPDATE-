@@ -18,7 +18,10 @@ from ai_chat import get_yuki_response, get_mimi_sticker
 from tts import generate_voice 
 
 # MODULES
-import admin, start, help, group, leaderboard, pay, bet, wordseek, grouptools, chatstat, logger, events, info
+import admin, start, help, group, leaderboard, pay, bet, wordseek, grouptools, chatstat, logger, events
+
+# 🔥 New Info Module
+import info
 
 # 🔥 Bank Updated Import
 import bank 
@@ -47,10 +50,8 @@ async def delete_job(context):
 
 # --- SHOP MENU ---
 async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Logic to handle both Command and Button Click
     if update.callback_query:
         uid = update.callback_query.from_user.id
-        # Button click me EDIT karna better lagta hai
         msg_func = update.callback_query.message.edit_text 
     else:
         uid = update.effective_user.id
@@ -76,7 +77,7 @@ async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     codes_col.update_one({"code": code}, {"$push": {"redeemed_by": user.id}})
     await update.message.reply_text(f"🎉 Redeemed ₹{data['amount']}!")
 
-# --- CALLBACK HANDLER (ALL BUTTONS FIXED) ---
+# --- CALLBACK HANDLER ---
 async def callback_handler(update, context):
     q = update.callback_query
     data = q.data
@@ -88,8 +89,7 @@ async def callback_handler(update, context):
         except: pass
         return
 
-    # 2. START MENU BUTTONS (Routing)
-    # Ye codes Start Message ke buttons se match hone chahiye
+    # 2. START MENU BUTTONS
     if data == "open_shop":
         await q.answer()
         await shop_menu(update, context)
@@ -97,7 +97,6 @@ async def callback_handler(update, context):
     
     if data == "open_games":
         await q.answer()
-        # Games ka help menu dikhao
         kb = [[InlineKeyboardButton("🔙 Back", callback_data="back_home")]]
         msg = "🎮 **GAME MENU**\n\n🎲 `/bet` - Bomb Game\n🔠 `/new` - Word Seek\n💰 `/invest` - Stock Market"
         await q.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
@@ -105,13 +104,12 @@ async def callback_handler(update, context):
 
     if data == "open_ranking":
         await q.answer()
-        # Leaderboard call karo (Updated leaderboard.py zaroori hai)
         await leaderboard.user_leaderboard(update, context)
         return
 
     if data == "open_commands":
         await q.answer()
-        await help.help_callback(update, context) # Redirect to Help
+        await help.help_callback(update, context)
         return
     
     if data == "back_home":
@@ -163,7 +161,6 @@ async def callback_handler(update, context):
         update_balance(uid, -item["price"])
         users_col.update_one({"_id": uid}, {"$push": {"titles": item["name"]}})
         await q.answer(f"Bought {item['name']}!")
-        # await q.message.delete() # Shop band nahi karte, taaki aur khareed sake
         return
     
     # 9. REVIVE
@@ -253,6 +250,11 @@ def main():
     app.add_handler(CommandHandler("help", help.help_command))
     app.add_handler(CommandHandler("admin", admin.admin_panel))
     
+    # 🔥 User Info & Fun (New) - INDENTATION FIXED HERE
+    app.add_handler(CommandHandler("info", info.user_info))
+    app.add_handler(CommandHandler("love", info.love_calculator))
+    app.add_handler(CommandHandler("stupid", info.stupid_meter))
+    
     # Economy
     app.add_handler(CommandHandler("bal", check_balance))
     app.add_handler(CommandHandler("redeem", redeem_code))
@@ -285,11 +287,6 @@ def main():
     app.add_handler(CommandHandler("kill", pay.kill_user))
     app.add_handler(CommandHandler("protect", pay.protect_user))
     app.add_handler(CommandHandler("alive", pay.check_status))
-
-# User Info & Fun
-app.add_handler(CommandHandler("info", info.user_info))
-app.add_handler(CommandHandler("love", info.love_calculator))
-app.add_handler(CommandHandler("stupid", info.stupid_meter))
 
     # Callback Handlers
     app.add_handler(CallbackQueryHandler(callback_handler))
