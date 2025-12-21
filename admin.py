@@ -1,3 +1,4 @@
+import html
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
@@ -11,8 +12,13 @@ from database import (
     set_logger_group, delete_logger_group
 )
 
-# Global variable state maintain karne ke liye
+# Global State
 ADMIN_INPUT_STATE = {} 
+
+# Fancy Font Helper
+def to_fancy(text):
+    mapping = {'A': 'Λ', 'E': 'Є', 'S': 'δ', 'O': 'σ', 'T': 'ᴛ', 'N': 'ɴ', 'M': 'ᴍ', 'U': 'ᴜ', 'R': 'ʀ', 'D': 'ᴅ', 'C': 'ᴄ', 'P': 'ᴘ', 'G': 'ɢ', 'B': 'ʙ', 'L': 'ʟ', 'W': 'ᴡ', 'K': 'ᴋ', 'J': 'ᴊ', 'Y': 'ʏ', 'I': 'ɪ', 'H': 'ʜ'}
+    return "".join(mapping.get(c.upper(), c) for c in text)
 
 # --- 1. MAIN ADMIN PANEL ---
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -27,14 +33,18 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     game_keys = len(get_game_keys())
     stickers = len(get_sticker_packs())
 
-    text = (
-        f"👮‍♂️ **ADMIN CONTROL PANEL**\n\n"
-        f"⚙️ **Economy:** {eco_status}\n"
-        f"💬 **Chat Keys:** `{chat_keys}`\n"
-        f"🎮 **Game Keys:** `{game_keys}`\n"
-        f"👻 **Stickers:** `{stickers}`\n\n"
-        f"👇 Select an action:"
-    )
+    text = f"""
+<blockquote><b>👮‍♂️ {to_fancy('ADMIN CONTROL PANEL')}</b></blockquote>
+
+<blockquote>
+<b>⚙️ ᴇᴄᴏɴᴏᴍʏ :</b> {eco_status}
+<b>💬 ᴄʜᴀᴛ ᴋᴇʏs :</b> {chat_keys}
+<b>🎮 ɢᴀᴍᴇ ᴋᴇʏs :</b> {game_keys}
+<b>👻 sᴛɪᴄᴋᴇʀs :</b> {stickers}
+</blockquote>
+
+<blockquote>👇 <b>Select an action below:</b></blockquote>
+"""
 
     kb = [
         [InlineKeyboardButton(f"Economy: {eco_status}", callback_data="admin_toggle_eco")],
@@ -51,9 +61,9 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     
     if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
     else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
 
 # --- 2. CALLBACK HANDLER ---
 async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -62,28 +72,32 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = q.from_user.id
     
     if str(user_id) != str(OWNER_ID):
-        await q.answer("❌ Sirf Owner ke liye hai!", show_alert=True)
+        await q.answer("❌ Only Owner can use this!", show_alert=True)
         return
 
     # --- SUB-MENUS ---
     if data == "admin_chat_keys_menu":
         kb = [[InlineKeyboardButton("➕ Add Key", callback_data="admin_key_add")], [InlineKeyboardButton("➖ Del Key", callback_data="admin_key_del")], [InlineKeyboardButton("🔙 Back", callback_data="admin_back")]]
-        await q.edit_message_text("🔑 **Chat API Keys (Gemini)**", reply_markup=InlineKeyboardMarkup(kb))
+        msg = f"<blockquote><b>🔑 {to_fancy('CHAT API KEYS')} (Gemini)</b></blockquote>"
+        await q.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
         return
 
     if data == "admin_game_keys_menu":
         kb = [[InlineKeyboardButton("➕ Add Key", callback_data="admin_game_key_add")], [InlineKeyboardButton("➖ Del Key", callback_data="admin_game_key_del")], [InlineKeyboardButton("🔙 Back", callback_data="admin_back")]]
-        await q.edit_message_text("🎮 **Game API Keys (WordSeek)**", reply_markup=InlineKeyboardMarkup(kb))
+        msg = f"<blockquote><b>🎮 {to_fancy('GAME API KEYS')} (WordSeek)</b></blockquote>"
+        await q.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
         return
 
     if data == "admin_stickers_menu":
         kb = [[InlineKeyboardButton("➕ Add Pack", callback_data="admin_pack_add")], [InlineKeyboardButton("➖ Del Pack", callback_data="admin_pack_del")], [InlineKeyboardButton("🔙 Back", callback_data="admin_back")]]
-        await q.edit_message_text("👻 **Sticker Packs Management**", reply_markup=InlineKeyboardMarkup(kb))
+        msg = f"<blockquote><b>👻 {to_fancy('STICKER PACKS')}</b></blockquote>"
+        await q.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
         return
 
     if data == "admin_logger_menu":
         kb = [[InlineKeyboardButton("📝 Set Logger", callback_data="admin_set_logger")], [InlineKeyboardButton("🗑 Del Logger", callback_data="admin_del_logger")], [InlineKeyboardButton("🔙 Back", callback_data="admin_back")]]
-        await q.edit_message_text("📝 **Logger Settings**", reply_markup=InlineKeyboardMarkup(kb))
+        msg = f"<blockquote><b>📝 {to_fancy('LOGGER SETTINGS')}</b></blockquote>"
+        await q.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
         return
 
     # --- INPUT TRIGGERS (ADD & DELETE) ---
@@ -91,46 +105,49 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. Chat Keys
     if data == "admin_key_add":
         ADMIN_INPUT_STATE[user_id] = 'add_key'
-        await q.edit_message_text("➕ Send Gemini API Key:")
+        await q.edit_message_text(f"<blockquote>➕ <b>Send Gemini API Key:</b></blockquote>", parse_mode=ParseMode.HTML)
     elif data == "admin_key_del":
         ADMIN_INPUT_STATE[user_id] = 'del_key'
-        keys = "\n".join([f"`{k}`" for k in get_all_keys()])
-        await q.edit_message_text(f"➖ Send Chat Key to delete:\n\n{keys}", parse_mode=ParseMode.MARKDOWN)
+        keys = "\n".join([f"<code>{k}</code>" for k in get_all_keys()])
+        msg = f"<blockquote>➖ <b>Send Chat Key to delete:</b></blockquote>\n\n{keys}"
+        await q.edit_message_text(msg, parse_mode=ParseMode.HTML)
 
     # 2. Game Keys
     elif data == "admin_game_key_add":
         ADMIN_INPUT_STATE[user_id] = 'add_game_key'
-        await q.edit_message_text("🎮 Send WordSeek API Key:")
+        await q.edit_message_text(f"<blockquote>🎮 <b>Send WordSeek API Key:</b></blockquote>", parse_mode=ParseMode.HTML)
     elif data == "admin_game_key_del":
         ADMIN_INPUT_STATE[user_id] = 'del_game_key'
-        keys = "\n".join([f"`{k}`" for k in get_game_keys()])
-        await q.edit_message_text(f"➖ Send Game Key to delete:\n\n{keys}", parse_mode=ParseMode.MARKDOWN)
+        keys = "\n".join([f"<code>{k}</code>" for k in get_game_keys()])
+        msg = f"<blockquote>➖ <b>Send Game Key to delete:</b></blockquote>\n\n{keys}"
+        await q.edit_message_text(msg, parse_mode=ParseMode.HTML)
 
     # 3. Stickers
     elif data == "admin_pack_add":
         ADMIN_INPUT_STATE[user_id] = 'add_pack'
-        await q.edit_message_text("👻 Send Sticker Pack Name or Link:")
+        await q.edit_message_text(f"<blockquote>👻 <b>Send Sticker Pack Name or Link:</b></blockquote>", parse_mode=ParseMode.HTML)
     elif data == "admin_pack_del":
         ADMIN_INPUT_STATE[user_id] = 'del_pack'
-        packs = "\n".join([f"`{p}`" for p in get_sticker_packs()])
-        await q.edit_message_text(f"➖ Send Pack Name to delete:\n\n{packs}", parse_mode=ParseMode.MARKDOWN)
+        packs = "\n".join([f"<code>{p}</code>" for p in get_sticker_packs()])
+        msg = f"<blockquote>➖ <b>Send Pack Name to delete:</b></blockquote>\n\n{packs}"
+        await q.edit_message_text(msg, parse_mode=ParseMode.HTML)
 
     # 4. Others
     elif data == "admin_cast_ask":
         ADMIN_INPUT_STATE[user_id] = 'broadcast'
-        await q.edit_message_text("📢 Send anything to Broadcast (Text/Photo/Video):")
+        await q.edit_message_text(f"<blockquote>📢 <b>Send anything to Broadcast (Text/Photo/Video):</b></blockquote>", parse_mode=ParseMode.HTML)
     elif data == "admin_add_ask":
         ADMIN_INPUT_STATE[user_id] = 'add_money'
-        await q.edit_message_text("💰 Format: `UserID Amount` (Ex: `123 5000`)")
+        await q.edit_message_text(f"<blockquote>💰 <b>Format:</b> <code>UserID Amount</code>\n(Ex: <code>12345 5000</code>)</blockquote>", parse_mode=ParseMode.HTML)
     elif data == "admin_take_ask":
         ADMIN_INPUT_STATE[user_id] = 'take_money'
-        await q.edit_message_text("💸 Format: `UserID Amount` (Ex: `123 5000`)")
+        await q.edit_message_text(f"<blockquote>💸 <b>Format:</b> <code>UserID Amount</code>\n(Ex: <code>12345 5000</code>)</blockquote>", parse_mode=ParseMode.HTML)
     elif data == "admin_set_logger":
         ADMIN_INPUT_STATE[user_id] = "waiting_logger_id"
-        await q.edit_message_text("📝 Send Logger Group ID:")
+        await q.edit_message_text(f"<blockquote>📝 <b>Send Logger Group ID:</b></blockquote>", parse_mode=ParseMode.HTML)
     elif data == "admin_code_ask":
         ADMIN_INPUT_STATE[user_id] = 'create_code'
-        await q.edit_message_text("🎁 Format: `Name Amount Limit` (Ex: `MIMI100 500 10`)")
+        await q.edit_message_text(f"<blockquote>🎁 <b>Format:</b> <code>Name Amount Limit</code>\n(Ex: <code>MIMI100 500 10</code>)</blockquote>", parse_mode=ParseMode.HTML)
 
     # --- ACTIONS ---
     elif data == "admin_toggle_eco":
@@ -142,10 +159,11 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await admin_panel(update, context)
     elif data == "admin_wipe_ask":
         kb = [[InlineKeyboardButton("⚠️ CONFIRM WIPE", callback_data="admin_wipe_confirm")], [InlineKeyboardButton("🔙 Back", callback_data="admin_back")]]
-        await q.edit_message_text("☢️ **Database Wipe?** This cannot be undone!", reply_markup=InlineKeyboardMarkup(kb))
+        msg = f"<blockquote>☢️ <b>DATABASE WIPE?</b></blockquote>\n<blockquote>This cannot be undone! Are you sure?</blockquote>"
+        await q.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
     elif data == "admin_wipe_confirm":
         wipe_database()
-        await q.edit_message_text("💀 Database Wiped!")
+        await q.edit_message_text("<blockquote>💀 <b>DATABASE WIPED!</b></blockquote>", parse_mode=ParseMode.HTML)
     elif data == "admin_back":
         await admin_panel(update, context)
     elif data == "admin_close":
