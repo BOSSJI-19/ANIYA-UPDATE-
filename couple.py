@@ -6,18 +6,17 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
+# 🔥 Import Users Collection
 from database import users_col
 
-# --- CONFIGURATION (इन्हें इमेज के हिसाब से सेट किया है) ---
+# --- CONFIGURATION ---
 BG_IMAGE = "ccpic.png" 
 FONT_PATH = "arial.ttf" 
 
-# 🔥 COORDINATES FIXED FOR RED BACKGROUND
-# (Left aur Right circle ka Top-Left corner X, Y)
-# Agar thoda idhar udhar ho to numbers badal kar adjust kar lena
-POS_1 = (165, 205)   # Left Circle (Ladka)
-POS_2 = (660, 205)   # Right Circle (Ladki)
-CIRCLE_SIZE = 360    # Circle ka size bada kiya hai taki fit aaye
+# Coordinates (Left & Right Circles)
+POS_1 = (165, 205)   
+POS_2 = (660, 205)
+CIRCLE_SIZE = 360    
 
 def to_fancy(text):
     mapping = {'A': 'Λ', 'E': 'Є', 'S': 'δ', 'O': 'σ', 'T': 'ᴛ', 'N': 'ɴ', 'M': 'ᴍ', 'U': 'ᴜ', 'R': 'ʀ', 'D': 'ᴅ', 'C': 'ᴄ', 'P': 'ᴘ', 'G': 'ɢ', 'B': 'ʙ', 'L': 'ʟ', 'W': 'ᴡ', 'K': 'ᴋ', 'J': 'ᴊ', 'Y': 'ʏ', 'I': 'ɪ', 'H': 'ʜ'}
@@ -25,76 +24,94 @@ def to_fancy(text):
 
 # --- IMAGE GENERATOR ---
 async def make_couple_img(user1, user2, context):
+    print("🎨 Generating Image...") # Debug Log
     try:
         bg = Image.open(BG_IMAGE).convert("RGBA")
-    except:
+    except Exception as e:
+        print(f"❌ Error Opening ccpic.png: {e}")
         return None 
 
-    # Helper function to get Circular PFP
-    async def get_pfp(u_id):
+    # Helper: Circular PFP
+    async def get_pfp(u_id, name):
         try:
-            # Telegram se photo fetch karo
+            # 1. Try Fetching PFP from Telegram
             photos = await context.bot.get_profile_photos(u_id, limit=1)
             
             if photos.total_count > 0:
-                # Photo download karo
                 file = await context.bot.get_file(photos.photos[0][-1].file_id)
                 f_data = await file.download_as_bytearray()
                 img = Image.open(io.BytesIO(f_data)).convert("RGBA")
             else:
-                # Agar photo nahi hai to Default letters
-                img = Image.new('RGBA', (CIRCLE_SIZE, CIRCLE_SIZE), (255, 200, 200))
+                raise Exception("No PFP Found") # Force Fallback
 
             # Resize High Quality
             img = ImageOps.fit(img, (CIRCLE_SIZE, CIRCLE_SIZE), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
 
-            # Circular Mask Create Karo
+            # Mask Logic
             mask = Image.new('L', (CIRCLE_SIZE, CIRCLE_SIZE), 0)
             draw = ImageDraw.Draw(mask)
             draw.ellipse((0, 0, CIRCLE_SIZE, CIRCLE_SIZE), fill=255)
 
-            # Mask Apply Karo
             result = Image.new('RGBA', (CIRCLE_SIZE, CIRCLE_SIZE), (0, 0, 0, 0))
             result.paste(img, (0, 0), mask=mask)
             return result
             
         except Exception as e:
-            print(f"PFP Error: {e}")
-            # Error aane par blank circle
-            return Image.new('RGBA', (CIRCLE_SIZE, CIRCLE_SIZE), (128, 128, 128))
+            # 2. Fallback (Agar Photo na mile to Initials wala Circle banayega)
+            print(f"⚠️ PFP Failed for {u_id}: {e}")
+            img = Image.new('RGBA', (CIRCLE_SIZE, CIRCLE_SIZE), (random.randint(50, 200), random.randint(50, 200), random.randint(50, 200)))
+            draw = ImageDraw.Draw(img)
+            
+            # Draw First Letter of Name
+            try:
+                # Basic font agar arial na mile
+                fnt = ImageFont.truetype(FONT_PATH, 150)
+            except:
+                fnt = ImageFont.load_default()
+                
+            text = name[0].upper() if name else "?"
+            
+            # Center Text Logic (Updated for Pillow 10+)
+            bbox = draw.textbbox((0, 0), text, font=fnt)
+            w = bbox[2] - bbox[0]
+            h = bbox[3] - bbox[1]
+            draw.text(((CIRCLE_SIZE - w) / 2, (CIRCLE_SIZE - h) / 2 - 20), text, font=fnt, fill="white")
+            
+            # Mask Apply (Circle banane ke liye)
+            mask = Image.new('L', (CIRCLE_SIZE, CIRCLE_SIZE), 0)
+            d_mask = ImageDraw.Draw(mask)
+            d_mask.ellipse((0, 0, CIRCLE_SIZE, CIRCLE_SIZE), fill=255)
+            
+            result = Image.new('RGBA', (CIRCLE_SIZE, CIRCLE_SIZE), (0, 0, 0, 0))
+            result.paste(img, (0, 0), mask=mask)
+            return result
 
-    # 1. Get PFPs
-    pfp1 = await get_pfp(user1['id'])
-    pfp2 = await get_pfp(user2['id'])
+    # 1. Generate PFPs
+    pfp1 = await get_pfp(user1['id'], user1['first_name'])
+    pfp2 = await get_pfp(user2['id'], user2['first_name'])
 
-    # 2. Paste on Background (Mask ke sath taaki transparency rahe)
+    # 2. Paste
     bg.paste(pfp1, POS_1, pfp1)
     bg.paste(pfp2, POS_2, pfp2)
 
-    # 3. Add Text
+    # 3. Add Names
     draw = ImageDraw.Draw(bg)
     try:
-        # Font size thoda chhota kiya hai taki naam fit aaye
         font = ImageFont.truetype(FONT_PATH, 35) 
     except:
         font = ImageFont.load_default()
 
-    # Name 1 (Left)
+    # Name 1
     name1 = user1['first_name'][:15]
     bbox1 = draw.textbbox((0, 0), name1, font=font)
     w1 = bbox1[2] - bbox1[0]
-    # Center text below circle
-    x1 = POS_1[0] + (CIRCLE_SIZE - w1) // 2
-    y1 = POS_1[1] + CIRCLE_SIZE + 40 # Thoda aur neeche
-    draw.text((x1, y1), name1, font=font, fill=(255, 255, 255)) # White Text better dikhega red par
+    draw.text((POS_1[0] + (CIRCLE_SIZE - w1) // 2, POS_1[1] + CIRCLE_SIZE + 40), name1, font=font, fill="white")
 
-    # Name 2 (Right)
+    # Name 2
     name2 = user2['first_name'][:15]
     bbox2 = draw.textbbox((0, 0), name2, font=font)
     w2 = bbox2[2] - bbox2[0]
-    x2 = POS_2[0] + (CIRCLE_SIZE - w2) // 2
-    y2 = POS_2[1] + CIRCLE_SIZE + 40
-    draw.text((x2, y2), name2, font=font, fill=(255, 255, 255)) 
+    draw.text((POS_2[0] + (CIRCLE_SIZE - w2) // 2, POS_2[1] + CIRCLE_SIZE + 40), name2, font=font, fill="white")
 
     # 4. Save
     bio = io.BytesIO()
@@ -106,41 +123,45 @@ async def make_couple_img(user1, user2, context):
 # --- COUPLE COMMAND ---
 async def couple_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
-    bot_id = context.bot.id 
+    bot_id = context.bot.id if context.bot.id else 0
     
     msg = await update.message.reply_text("🔍 **Finding a perfect match...**", parse_mode=ParseMode.MARKDOWN)
 
     try:
-        # 🔥 FIX: Exclude Bot ID from selection
+        # Check if DB is connected
+        if users_col is None:
+            await msg.edit_text("❌ Database Error: `users_col` not found!")
+            return
+
+        # 🔥 FIX: Fetch Users Safely
         pipeline = [
-            {"$match": {"_id": {"$ne": bot_id}}}, # Bot ko list se hata diya
+            {"$match": {"_id": {"$ne": bot_id}}}, 
             {"$sample": {"size": 2}}
         ]
         
+        # Async IO se bachne ke liye list()
         random_users = list(users_col.aggregate(pipeline))
         
-        # Agar DB me users kam hain to fake data for testing
         if len(random_users) < 2:
-            # Fallback (Agar DB khali hai to ye use hoga)
+            # Fallback for Testing
             u1 = {'_id': update.effective_user.id, 'name': update.effective_user.first_name}
-            u2 = {'_id': 0, 'name': 'Herobrine'} # Dummy
+            u2 = {'_id': 0, 'name': 'Herobrine'} 
         else:
             u1 = random_users[0]
             u2 = random_users[1]
         
-        # Prepare Data
         user1_data = {'id': u1['_id'], 'first_name': u1.get('name', 'Lover 1')}
         user2_data = {'id': u2['_id'], 'first_name': u2.get('name', 'Lover 2')}
         
     except Exception as e:
-        print(e)
-        return await msg.edit_text("❌ Database Error.")
+        print(f"❌ DB Error in Couple: {e}")
+        return await msg.edit_text(f"❌ Database Error: {e}")
 
     # Generate Image
     photo = await make_couple_img(user1_data, user2_data, context)
     
     if not photo:
-        await msg.edit_text("❌ Error: `ccpic.png` nahi mili ya corrupt hai.")
+        await msg.edit_text("❌ Error: `ccpic.png` missing or corrupt!")
         return
 
     # Caption
@@ -157,13 +178,16 @@ async def couple_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 <b>📅 ᴅᴀᴛᴇ :</b> {to_fancy("FOREVER")}
 </blockquote>
 """
-    # Support Button
     kb = [[InlineKeyboardButton("👨‍💻 Support", url="https://t.me/Dev_Digan")]] 
     
-    await update.message.reply_photo(
-        photo=photo,
-        caption=caption,
-        reply_markup=InlineKeyboardMarkup(kb),
-        parse_mode=ParseMode.HTML
-    )
-    await msg.delete()
+    try:
+        await update.message.reply_photo(
+            photo=photo,
+            caption=caption,
+            reply_markup=InlineKeyboardMarkup(kb),
+            parse_mode=ParseMode.HTML
+        )
+        await msg.delete()
+    except Exception as e:
+        print(f"❌ Sending Error: {e}")
+        await msg.edit_text("❌ Error sending photo!")
