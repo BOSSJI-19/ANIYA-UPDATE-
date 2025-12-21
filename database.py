@@ -1,4 +1,4 @@
-import pymongo
+import pymongo # Fixed typo (Import -> import)
 import time
 import datetime 
 from config import MONGO_URL
@@ -21,7 +21,7 @@ try:
     packs_col = db["sticker_packs"]  
     chat_stats_col = db["chat_stats"]
     
-    # 🔥 NEW: Voice & Moderation Collections
+    # Voice & Moderation
     voice_keys_col = db["voice_keys"] 
     mutes_col = db["mutes"]           
     bans_col = db["bans"]             
@@ -174,43 +174,47 @@ def wipe_database():
     for col in cols: col.delete_many({})
     return True
 
-# --- 7. API KEYS ---
+# --- 7. API KEYS (with whitespace fix) ---
 
 def add_api_key(api_key):
-    if keys_col.find_one({"key": api_key}): return False 
-    keys_col.insert_one({"key": api_key})
+    clean_key = api_key.strip()
+    if keys_col.find_one({"key": clean_key}): return False 
+    keys_col.insert_one({"key": clean_key})
     return True
-def remove_api_key(api_key): return keys_col.delete_one({"key": api_key}).deleted_count > 0
+def remove_api_key(api_key): return keys_col.delete_one({"key": api_key.strip()}).deleted_count > 0
 def get_all_keys(): return [k["key"] for k in list(keys_col.find({}, {"_id": 0, "key": 1}))]
 
 def add_voice_key(api_key):
-    if voice_keys_col.find_one({"key": api_key}): return False 
-    voice_keys_col.insert_one({"key": api_key})
+    clean_key = api_key.strip()
+    if voice_keys_col.find_one({"key": clean_key}): return False 
+    voice_keys_col.insert_one({"key": clean_key})
     return True
-def remove_voice_key(api_key): return voice_keys_col.delete_one({"key": api_key}).deleted_count > 0
+def remove_voice_key(api_key): return voice_keys_col.delete_one({"key": api_key.strip()}).deleted_count > 0
 def get_all_voice_keys(): return [k["key"] for k in list(voice_keys_col.find({}, {"_id": 0, "key": 1}))]
-def set_custom_voice(voice_id): settings_col.update_one({"_id": "voice_settings"}, {"$set": {"voice_id": voice_id}}, upsert=True)
+def set_custom_voice(voice_id): settings_col.update_one({"_id": "voice_settings"}, {"$set": {"voice_id": voice_id.strip()}}, upsert=True)
 def get_custom_voice():
     data = settings_col.find_one({"_id": "voice_settings"})
     return data["voice_id"] if data else "21m00Tcm4TlvDq8ikWAM"
 
 def add_game_key(api_key):
-    if game_keys_col.find_one({"key": api_key}): return False 
-    game_keys_col.insert_one({"key": api_key})
+    clean_key = api_key.strip()
+    if game_keys_col.find_one({"key": clean_key}): return False 
+    game_keys_col.insert_one({"key": clean_key})
     return True
-def remove_game_key(api_key): return game_keys_col.delete_one({"key": api_key}).deleted_count > 0
+def remove_game_key(api_key): return game_keys_col.delete_one({"key": api_key.strip()}).deleted_count > 0
 def get_game_keys(): return [k["key"] for k in list(game_keys_col.find({}, {"_id": 0, "key": 1}))]
 
 # --- 8. STICKERS & STATS ---
 
 def add_sticker_pack(pack_name):
-    if not packs_col.find_one({"name": pack_name}):
-        packs_col.insert_one({"name": pack_name})
+    clean_pack = pack_name.strip()
+    if not packs_col.find_one({"name": clean_pack}):
+        packs_col.insert_one({"name": clean_pack})
         return True
     return False
 def remove_sticker_pack(pack_name):
-    if packs_col.find_one({"name": pack_name}):
-        packs_col.delete_one({"name": pack_name})
+    if packs_col.find_one({"name": pack_name.strip()}):
+        packs_col.delete_one({"name": pack_name.strip()})
         return True
     return False
 def get_sticker_packs(): return [d["name"] for d in list(packs_col.find())]
@@ -218,20 +222,34 @@ def get_sticker_packs(): return [d["name"] for d in list(packs_col.find())]
 def update_chat_stats(group_id, user_id, name):
     now = datetime.datetime.now()
     today_str = now.strftime("%Y-%m-%d")
+    week_str = now.strftime("%Y-%W")
+    
     data = chat_stats_col.find_one({"group_id": group_id, "user_id": user_id})
     if not data:
-        chat_stats_col.insert_one({"group_id": group_id, "user_id": user_id, "name": name, "overall": 1, "today": 1, "last_date": today_str})
+        chat_stats_col.insert_one({
+            "group_id": group_id, "user_id": user_id, "name": name, 
+            "overall": 1, "today": 1, "week": 1,
+            "last_date": today_str, "last_week": week_str
+        })
     else:
         update_query = {"$inc": {"overall": 1}, "$set": {"name": name}}
+        
         if data.get("last_date") != today_str:
             update_query["$set"]["today"] = 1
             update_query["$set"]["last_date"] = today_str
         else: update_query["$inc"]["today"] = 1
+        
+        if data.get("last_week") != week_str:
+            update_query["$set"]["week"] = 1
+            update_query["$set"]["last_week"] = week_str
+        else: update_query["$inc"]["week"] = 1
+            
         chat_stats_col.update_one({"_id": data["_id"]}, update_query)
 
 def get_top_chatters(group_id, mode="overall"):
     sort_key = "overall" 
     if mode == "today": sort_key = "today"
+    elif mode == "week": sort_key = "week"
     cursor = chat_stats_col.find({"group_id": group_id}).sort(sort_key, -1).limit(10)
     return list(cursor)
 
@@ -245,7 +263,8 @@ def get_total_messages(group_id):
 def update_group_activity(group_id, group_name):
     groups_col.update_one({"_id": group_id}, {"$set": {"name": group_name}, "$inc": {"activity": 1}}, upsert=True)
 
-def remove_group(group_id): groups_col.delete_one({"_id": group_id})
+def remove_group(group_id): 
+    groups_col.delete_one({"_id": group_id})
 
 def get_group_price(group_id):
     grp = groups_col.find_one({"_id": group_id})
