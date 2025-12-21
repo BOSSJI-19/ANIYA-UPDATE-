@@ -1,56 +1,59 @@
+import html
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 from database import users_col
 
+# Fancy Font Helper
+def to_fancy(text):
+    mapping = {'A': 'Λ', 'E': 'Є', 'S': 'δ', 'O': 'σ', 'T': 'ᴛ', 'N': 'ɴ', 'M': 'ᴍ', 'U': 'ᴜ', 'R': 'ʀ', 'D': 'ᴅ', 'C': 'ᴄ', 'P': 'ᴘ', 'G': 'ɢ', 'B': 'ʙ', 'L': 'ʟ', 'W': 'ᴡ', 'K': 'ᴋ', 'J': 'ᴊ', 'Y': 'ʏ', 'I': 'ɪ', 'H': 'ʜ'}
+    return "".join(mapping.get(c.upper(), c) for c in text)
+
 async def user_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # 1. Sabse bada Killer dhoondo (Jiske kills sabse zyada hain)
-    # Taaki hum usse special tag de sakein
+    # 1. Find Top Killer
     top_killer_data = users_col.find_one(sort=[("kills", -1)])
     top_killer_id = top_killer_data["_id"] if top_killer_data else None
 
-    # 2. Top 10 Ameer Log (Rich List)
+    # 2. Top 10 Richest Users
     top_users = users_col.find().sort("balance", -1).limit(10)
     
-    msg = "🏆 **GLOBAL RICH LIST** 🏆\n\n"
+    # Header Block
+    msg = f"<blockquote><b>🏆 {to_fancy('GLOBAL RICH LIST')}</b></blockquote>\n\n"
+    
     rank = 1
     
     for user in top_users:
-        name = user.get("name", "Unknown")
+        name = html.escape(user.get("name", "Unknown"))
         bal = user.get("balance", 0)
         titles = user.get("titles", [])
-        kills = user.get("kills", 0) # Kill Count
+        kills = user.get("kills", 0)
         user_id = user.get("_id")
         
         # Rank Icons
         if rank == 1: icon = "🥇"
         elif rank == 2: icon = "🥈"
         elif rank == 3: icon = "🥉"
-        else: icon = f"{rank}."
+        else: icon = f"<b>{rank}.</b>"
         
         # --- TAGS LOGIC ---
         tags = ""
         
-        # A. Shop Title (Sirf pehla wala dikhayenge)
+        # A. Shop Title (Show only first one)
         if titles:
-            tags += f" [{titles[0]}]"
+            tags += f" [<b>{html.escape(titles[0])}</b>]"
             
-        # B. KILLER TAG (Agar ye banda Top Killer hai aur kills > 0 hai)
+        # B. KILLER TAG (If user is Top Killer and has kills > 0)
         if user_id == top_killer_id and kills > 0:
-            tags += " 🔪[THE KILLER]"
+            tags += " 🔪[<b>THE KILLER</b>]"
 
         # --- FORMATTING LOGIC ---
-        # Rule: Rank 1 WALA hamesha Blockquote me hoga
-        # Aur jinke paas Titles hain wo bhi Blockquote me honge
-        
-        if rank == 1 or titles:
-            # ✨ VIP Look (Blockquote)
-            msg += f"> {icon} {name}{tags}\n> 💰 ₹{bal} | 💀 Kills: {kills}\n\n"
+        # Top 3 Users get Special Quote Blocks
+        if rank <= 3:
+            msg += f"<blockquote>{icon} <b>{name}</b>{tags}\n💰 <code>₹{bal}</code> | 💀 <code>{kills} Kills</code></blockquote>\n"
         else:
-            # 👤 Normal Look
-            msg += f"{icon} {name}{tags} — ₹{bal} (💀 {kills})\n"
+            # Rank 4-10 Simple List
+            msg += f"{icon} <b>{name}</b>{tags} — <code>₹{bal}</code>\n"
             
         rank += 1
         
-    await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
-    
+    await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
