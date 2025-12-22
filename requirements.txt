@@ -9,5 +9,5 @@ edge-tts
 Pillow
 yt-dlp
 tgcrypto
-pyrogram==2.0.106
-py-tgcalls==1.1.0
+pyrogram
+py-tgcalls==2.2.8
