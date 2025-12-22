@@ -232,8 +232,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if await admin.handle_admin_input(update, context): return
     await wordseek.handle_word_guess(update, context)
     
-    # 🔥 5. WORD GRID WORD GUESS (NEW)
-    await wordgrid.handle_grid_guess(update, context)  # <-- Add this
+    # 🔥 5. WORD GRID WORD GUESS (NEW) - FIXED FUNCTION NAME
+    # CHANGE FROM handle_grid_guess TO handle_word_guess
+    await wordgrid.handle_word_guess(update, context)  # <-- FIXED: handle_word_guess NOT handle_grid_guess
 
     # 6. STICKER REPLY
     if update.message.sticker:
