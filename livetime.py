@@ -273,35 +273,33 @@ def create_time_display(city="delhi"):
     """Create beautiful time display"""
     time_data = get_current_time(city)
     
-    # Create fancy ASCII art for time
-    time_display = f"""
-╔{'═'*45}╗
-║{' '*15}⏰ LIVE TIME{' '*16}║
-╠{'═'*45}╣
-║ 📍 <b>City:</b> {time_data['city']}{' '*(35-len(time_data['city']))}║
-║ 🌐 <b>Timezone:</b> {time_data['timezone'].split('/')[-1]}{' '*(25-len(time_data['timezone'].split('/')[-1]))}║
-╠{'═'*45}╣
-║{' '*12}🕒 <b>{time_data['time']}</b>{' '*12}║
-╠{'═'*45}╣
-║ 📅 <b>{time_data['date']}</b>{' '*(37-len(time_data['date']))}║
-║ 📆 <b>Day:</b> {time_data['day']} | <b>Month:</b> {time_data['month']}{' '*(17-len(time_data['month']))}║
-║ 🌞 <b>Weekday:</b> {time_data['weekday']}{' '*(28-len(time_data['weekday']))}║
-╚{'═'*45}╝
+    # Create compact time display
+    time_display = f"""<b>🕒 LIVE TIME</b>
+
+<b>📍 City:</b> {time_data['city']}
+<b>🌐 Timezone:</b> {time_data['timezone'].split('/')[-1]}
+
+<b>⏰ Time:</b> <code>{time_data['time']}</code>
+
+<b>📅 Date:</b> {time_data['date']}
+<b>📆 Day:</b> {time_data['day']} | <b>Month:</b> {time_data['month']}
+<b>🌞 Weekday:</b> {time_data['weekday']}
 
 <b>🔄 Updates every second</b>
-<b>📍 Use:</b> <code>/time mumbai</code> for different city
-"""
+<b>📍 Use:</b> <code>/time mumbai</code> for different city"""
     
     return time_display
 
 async def update_live_time(context: ContextTypes.DEFAULT_TYPE):
-    """Update live time message"""
+    """Update live time message - FIXED VERSION"""
     chat_id = context.job.chat_id
-    message_id = context.job.data.get('message_id')
-    city = context.job.data.get('city', 'delhi')
     
     if chat_id in active_time_messages:
         try:
+            msg_info = active_time_messages[chat_id]
+            message_id = msg_info['message_id']
+            city = msg_info['city']
+            
             time_display = create_time_display(city)
             kb = [[InlineKeyboardButton("❌ Close", callback_data="close_time")]]
             
@@ -366,20 +364,17 @@ async def start_live_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print(f"Could not pin time message: {e}")
     
-    # Schedule live updates every second
+    # Schedule live updates every second - FIXED
     if context.job_queue:
         job = context.job_queue.run_repeating(
             update_live_time,
             interval=1,  # Update every second
             first=1,     # First update after 1 second
             chat_id=chat_id,
-            data={
-                'message_id': msg.message_id,
-                'city': city
-            },
             name=f"livetime_{chat_id}"
         )
         active_time_messages[chat_id]['job'] = job
+        print(f"LIVE TIME: Started live updates for chat {chat_id}, city: {city}")
 
 async def close_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Close live time display"""
@@ -394,7 +389,11 @@ async def close_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Cancel update job
         if 'job' in msg_info:
-            msg_info['job'].schedule_removal()
+            try:
+                msg_info['job'].schedule_removal()
+                print(f"LIVE TIME: Stopped updates for chat {chat_id}")
+            except:
+                pass
         
         # Unpin message if pinned
         if msg_info.get('pinned'):
@@ -414,6 +413,7 @@ async def close_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Remove from storage
         del active_time_messages[chat_id]
+        print(f"LIVE TIME: Cleaned up for chat {chat_id}")
     else:
         await query.answer("No active time display.", show_alert=True)
 
