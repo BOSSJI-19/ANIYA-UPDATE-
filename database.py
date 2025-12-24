@@ -1,7 +1,8 @@
-import pymongo # Fixed typo (Import -> import)
+import pymongo 
 import time
 import datetime 
-from config import MONGO_URL
+# 🔥 CHANGE 1: LOGGER_ID yahan import kiya hai
+from config import MONGO_URL, LOGGER_ID 
 
 # --- DATABASE CONNECTION ---
 try:
@@ -272,11 +273,20 @@ def get_group_price(group_id):
     return round(10 + (grp.get("activity", 0) * 0.1), 2)
 
 def set_logger_group(group_id): settings_col.update_one({"_id": "logger_settings"}, {"$set": {"group_id": int(group_id)}}, upsert=True)
+
+# 🔥 CHANGE 2: Updated Logic to check Config first
 def get_logger_group():
+    # Pehle Config Check karo
+    if LOGGER_ID:
+        return int(LOGGER_ID)
+    
+    # Agar Config me nahi hai toh Database check karo
     data = settings_col.find_one({"_id": "logger_settings"})
     return data["group_id"] if data else None
+
 def delete_logger_group(): settings_col.delete_one({"_id": "logger_settings"})
 
 # Global Counts
 def get_total_users(): return users_col.count_documents({})
 def get_total_groups(): return groups_col.count_documents({})
+              
