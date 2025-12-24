@@ -10,9 +10,9 @@ from config import OWNER_ID, OWNER_NAME
 from ai_chat import get_mimi_sticker
 
 # --- GLOBAL VARS ---
-START_IMG = "https://i.ibb.co/WLB2B31/1000007092.png" 
+START_IMG = "https://i.ibb.co/8gW9bqTd/IMG-20251224-191812-875.jpg" 
 BOT_START_TIME = time.time()
-SUPPORT_LINK = "https://t.me/+N08m5L1mCTU2NTE1"
+SUPPORT_LINK = "https://t.me/+aw9rUJoO2JYwNjQ1"
 
 # --- HELPER: GET UPTIME ---
 def get_readable_time():
@@ -47,13 +47,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Loading Animation Loop
     bars = [
-        "⚡ ʟᴏᴀᴅɪɴɢ ▒▒▒▒▒",
-        "💕 ʟᴏᴀᴅɪɴɢ █▒▒▒▒",
-        "👀 ʟᴏᴀᴅɪɴɢ ██▒▒▒",
-        "🍷 ʟᴏᴀᴅɪɴɢ ███▒▒",
-        "🍫 ʟᴏᴀᴅɪɴɢ ████▒",
-        "🫀 ʟᴏᴀᴅɪɴɢ █████",
-        "🥂 ᴄᴏᴍᴘʟᴇᴛᴇᴅ!"
+        "⚡ 𝚲𝛈𝛊𝛄𝛂 ɪs ʟᴏᴀᴅɪɴɢ....🌷🍡",
+        "💕 𝚲𝛈𝛊𝛄𝛂 ɪs ʟᴏᴀᴅɪɴɢ..🌷 ",
+        "👀 𝚲𝛈𝛊𝛄𝛂 ɪs ʟᴏᴀᴅɪɴɢ...🍡",
+        "🍷 𝚲𝛈𝛊𝛄𝛂 ɪs ʟᴏᴀᴅɪɴɢ.... ",
+        "🍫 𝚲𝛈𝛊𝛄𝛂 ɪs ʟᴏᴀᴅɪɴɢ. ",
+        "🫀 𝚲𝛈𝛊𝛄𝛂 ɪs ʟᴏᴀᴅɪɴɢ.. ",
+        "🥂 𝚲𝛈𝛊𝛄𝛂 ɪs ʟᴏᴀᴅɪɴɢ...🌷🍡!"
     ]
     
     for bar in bars:
@@ -95,7 +95,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ```
 •──────────────────────•
 ```
-✦ ᴘᴏᴡєʀєᴅ ʙʏ © ᯓ𓂃❛ 𝐒 𝛖 𝐝 ֟፝ᥱ 𝛆 𝛒 </𝟑 𝁘ໍ𝀛
+✦ ᴘᴏᴡєʀєᴅ ʙʏ © Ᏼø፝֟፝֟ssㅤᴊɪɪ ┋ꕥ 𝁘ໍ𝀛
 ```
 """
 
