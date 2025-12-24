@@ -7,34 +7,26 @@ from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 # IMPORTS
-from config import TELEGRAM_TOKEN
+# 🔥 Added BOT_NAME here
+from config import TELEGRAM_TOKEN, BOT_NAME 
 from database import (
     users_col, codes_col, update_balance, get_balance, 
     check_registered, register_user, update_group_activity, 
     update_username, update_chat_stats,
-    is_user_muted, is_user_banned
+    is_user_muted, is_user_banned,
+    get_logger_group # 🔥 Added this to fetch Logger ID
 )
 from ai_chat import get_yuki_response, get_mimi_sticker
 from tts import generate_voice 
 
 # MODULES
 import admin, start, help, group, leaderboard, pay, bet, wordseek, grouptools, chatstat, logger, events, info, tictactoe, couple
-
-# Add this to your imports
-import livetime  # <-- Add this
-
-# 🔥 Import New DM Spam Module
+import livetime  
 import dmspam 
-
-# 🔥 Bank Updated Import
 import bank 
 from bank import check_balance 
-
-# 🔥 Import Anti-Spam (Old Global Spam)
 from antispam import check_spam
-
-# 🔥 Import Word Grid Game
-import wordgrid  # <-- Add this
+import wordgrid 
 
 # --- FLASK SERVER ---
 app = Flask('')
@@ -54,9 +46,46 @@ async def delete_job(context):
     try: await context.bot.delete_message(context.job.chat_id, context.job.data)
     except: pass
 
+# --- STARTUP MESSAGE FUNCTION (FANCY & BLOCKQUOTE) ---
+async def on_startup(application: Application):
+    print(f"🚀 {BOT_NAME} IS STARTING...")
+    
+    # Database se Logger Group ID nikalo
+    logger_id = get_logger_group()
+    
+    if logger_id:
+        try:
+            me = await application.bot.get_me()
+            username = me.username
+            
+            # 🔥 FANCY MESSAGE WITH BLOCKQUOTE
+            txt = f"""
+<blockquote><b>🟢 SYSTEM BOOTED SUCCESSFULLY</b></blockquote>
+
+<blockquote>
+<b>🤖 ʙᴏᴛ ɴᴀᴍᴇ :</b> {BOT_NAME}
+<b>🆔 ʙᴏᴛ ɪᴅ :</b> <code>{me.id}</code>
+<b>🔗 ᴜsᴇʀɴᴀᴍᴇ :</b> @{username}
+</blockquote>
+
+<blockquote><i>🚀 Bot is now fully active and ready to serve!</i></blockquote>
+"""
+            
+            # Send to Logger Group
+            await application.bot.send_message(chat_id=logger_id, text=txt, parse_mode=ParseMode.HTML)
+            print("✅ Startup message sent to Logger!")
+        except Exception as e:
+            print(f"⚠️ Failed to send startup message: {e}")
+            
+            
+            # Send to Logger Group
+            await application.bot.send_message(chat_id=logger_id, text=txt, parse_mode=ParseMode.HTML)
+            print("✅ Startup message sent to Logger!")
+        except Exception as e:
+            print(f"⚠️ Failed to send startup message: {e}")
+
 # --- SHOP MENU ---
 async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Logic to handle both Command and Button Click
     if update.callback_query:
         uid = update.callback_query.from_user.id
         msg_func = update.callback_query.message.edit_text 
@@ -90,13 +119,11 @@ async def callback_handler(update, context):
     data = q.data
     uid = q.from_user.id
     
-    # 1. UI CLOSE ACTIONS
     if data in ["close_log", "close_ping", "close_help"]:
         try: await q.message.delete()
         except: pass
         return
 
-    # 2. START MENU BUTTONS
     if data == "open_shop":
         await q.answer()
         await shop_menu(update, context)
@@ -124,7 +151,6 @@ async def callback_handler(update, context):
         await start.start_callback(update, context)
         return
 
-    # 3. HELP MODULES
     if data.startswith(("help_", "mod_")): 
         await help.help_callback(update, context)
         return
@@ -133,32 +159,26 @@ async def callback_handler(update, context):
         await start.start_callback(update, context)
         return
 
-    # 4. ADMIN PANEL
     if data.startswith("admin_"):
         await admin.admin_callback(update, context)
         return
 
-    # 5. WORD SEEK GAME
     if data.startswith(("wrank_", "new_wordseek_", "close_wrank", "end_wordseek")):
         await wordseek.wordseek_callback(update, context)
         return
 
-    # 6. CHAT STATS
     if data.startswith(("rank_", "hide_rank")):
         await chatstat.rank_callback(update, context)
         return
         
-    # 7. BET & GAMES
     if data.startswith(("set_", "clk_", "cash_", "close_", "noop_", "rebet_")):
         await bet.bet_callback(update, context)
         return
 
-    # 8. TIC TAC TOE (ZERO CUTS)
     if data.startswith("ttt_"):
         await tictactoe.ttt_callback(update, context)
         return
 
-    # 9. REGISTRATION & SHOP BUYING
     if data.startswith("reg_start_"):
         if uid != int(data.split("_")[2]): return await q.answer("Not for you!", show_alert=True)
         if register_user(uid, q.from_user.first_name): await q.edit_message_text("✅ Registered!")
@@ -175,22 +195,18 @@ async def callback_handler(update, context):
         await q.answer(f"Bought {item['name']}!")
         return
     
-    # 10. REVIVE
     if data.startswith("revive_"):
         await pay.revive_callback(update, context)
         return
         
-    # 🔥 11. WORD GRID GAME (NEW)
     if data == "giveup_wordgrid":
         await wordgrid.give_up(update, context)
         return
         
-    # 🔥 12. WORD GRID LETTER SELECTION
     if data.startswith("grid_"):
         await wordgrid.grid_callback(update, context)
         return
 
-    # 🔥 13. LIVE TIME CALLBACK
     if data == "close_time":
         await livetime.close_time(update, context)
         return
@@ -201,28 +217,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat = update.effective_chat
     
-    # 🔥 0. DM/STICKER SPAM PROTECTION (Strict Mode)
-    # Ye check sabse pehle hoga. 
+    # 0. DM SPAM PROTECTION
     if chat.type == "private":
         spam_status = dmspam.check_spam(user.id)
-        
         if spam_status == "BLOCKED":
-            # Console me print karega taaki aapko pata chale
             print(f"🚫 Ignoring Spam from {user.first_name}") 
-            return # Ignore user completely (No reply)
-            
+            return 
         elif spam_status == "NEW_BLOCK":
             await update.message.reply_text("🚫 **Spam mat kar bhai!**\n5 minute ke liye block kiya ja raha hai.")
-            return # Block message bhej ke return
+            return 
 
-    # 1. ENFORCEMENT (Group Bans/Mutes)
+    # 1. ENFORCEMENT
     if chat.type in ["group", "supergroup"] and not user.is_bot:
         if is_user_banned(chat.id, user.id) or is_user_muted(chat.id, user.id):
             try: await update.message.delete()
             except: pass
             return
 
-    # 2. GLOBAL ANTI-SPAM (Old logic, keep if needed for groups)
+    # 2. GLOBAL ANTI-SPAM
     if not user.is_bot:
         status = check_spam(user.id)
         if status == "BLOCKED":
@@ -236,23 +248,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_chat_stats(chat.id, user.id, user.first_name)
         update_group_activity(chat.id, chat.title)
 
-    # 4. ADMIN & WORD GUESS
+    # 4. ADMIN & GAMES
     if await admin.handle_admin_input(update, context): return
     await wordseek.handle_word_guess(update, context)
-    
-    # 🔥 5. WORD GRID WORD GUESS (NEW) - FIXED FUNCTION NAME
-    # CHANGE FROM handle_grid_guess TO handle_word_guess
-    await wordgrid.handle_word_guess(update, context)  # <-- FIXED: handle_word_guess NOT handle_grid_guess
+    await wordgrid.handle_word_guess(update, context)
 
-    # 6. STICKER REPLY
+    # 5. STICKER REPLY
     if update.message.sticker:
-        # 20% Chance to reply sticker in Group OR Always in Private (unless handled by AI)
         if chat.type == "private" or (update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id) or random.random() < 0.2:
             sticker_id = await get_mimi_sticker(context.bot)
             if sticker_id: await update.message.reply_sticker(sticker_id)
         return
 
-    # 7. TEXT & VOICE AI
+    # 6. TEXT & VOICE AI
     text = update.message.text
     if not text: return
 
@@ -289,7 +297,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- MAIN ENGINE ---
 def main():
     keep_alive()
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    
+    # 🔥 Added post_init=on_startup here
+    app = Application.builder().token(TELEGRAM_TOKEN).post_init(on_startup).build()
     
     # Core Commands
     app.add_handler(CommandHandler("start", start.start))
@@ -316,7 +326,7 @@ def main():
     # Games & Market
     app.add_handler(CommandHandler("bet", bet.bet_menu))
     app.add_handler(CommandHandler("new", wordseek.start_wordseek))
-    app.add_handler(CommandHandler("wordgrid", wordgrid.start_wordgrid))  # <-- Add this
+    app.add_handler(CommandHandler("wordgrid", wordgrid.start_wordgrid))
     app.add_handler(CommandHandler("zero", tictactoe.start_ttt))
     app.add_handler(CommandHandler("market", group.market_info))
     app.add_handler(CommandHandler("invest", group.invest))
@@ -366,8 +376,9 @@ def main():
     # Message Logic (AI)
     app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_message))
     
-    print("🚀 MIMI BOT STARTED SUCCESSFULLY!")
+    print(f"🚀 {BOT_NAME} STARTED SUCCESSFULLY!")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
+
