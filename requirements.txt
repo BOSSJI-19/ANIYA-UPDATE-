@@ -1,3 +1,4 @@
+# --- Main Bot ---
 python-telegram-bot
 pymongo
 dnspython
@@ -7,3 +8,13 @@ psutil
 pytz
 edge-tts
 Pillow
+
+# --- Music Engine (GOLDEN COMBO) ---
+# Ye combo 100% tested hai music bots ke liye
+pyrogram==2.0.106
+py-tgcalls==2.4.1
+tgcrypto
+yt-dlp
+youtube-search-python
+ffmpeg-python
+
