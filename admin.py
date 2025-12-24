@@ -2,7 +2,8 @@ import html
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
-from config import OWNER_ID
+# Yahan neeche dhyan dena, maine OWNER_IDS import kiya hai
+from config import OWNER_IDS 
 from database import (
     users_col, groups_col, codes_col, update_balance, 
     add_api_key, remove_api_key, get_all_keys,
@@ -22,7 +23,9 @@ def to_fancy(text):
 
 # --- 1. MAIN ADMIN PANEL ---
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if str(update.effective_user.id) != str(OWNER_ID): return
+    # CHANGE: Ab ye list (OWNER_IDS) me check karega
+    if update.effective_user.id not in OWNER_IDS: 
+        return
 
     # Clear old state
     if update.effective_user.id in ADMIN_INPUT_STATE:
@@ -71,7 +74,8 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = q.data
     user_id = q.from_user.id
     
-    if str(user_id) != str(OWNER_ID):
+    # CHANGE: Ab ye list (OWNER_IDS) me check karega
+    if user_id not in OWNER_IDS:
         await q.answer("❌ Only Owner can use this!", show_alert=True)
         return
 
@@ -173,7 +177,10 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- 3. INPUT HANDLER ---
 async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if str(user_id) != str(OWNER_ID): return False
+    
+    # CHANGE: Ab ye list (OWNER_IDS) me check karega
+    if user_id not in OWNER_IDS: return False
+    
     state = ADMIN_INPUT_STATE.get(user_id)
     if not state: return False
 
@@ -253,3 +260,4 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     del ADMIN_INPUT_STATE[user_id]
     return True
+    
