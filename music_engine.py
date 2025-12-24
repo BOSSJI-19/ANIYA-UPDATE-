@@ -1,8 +1,7 @@
 import asyncio
 from pyrogram import Client
 from pytgcalls import PyTgCalls
-from pytgcalls.types import Update
-from pytgcalls.types.input_stream import AudioPiped, AudioVideoPiped
+from pytgcalls.types import MediaStream
 from config import API_ID, API_HASH, STRING_SESSION
 
 # Userbot Setup
@@ -38,10 +37,12 @@ async def join_group(chat_id, invite_link):
 
 async def play_audio(chat_id, file_path):
     try:
-        # 1.x Syntax: join_group_call use hota hai
-        await call_py.join_group_call(
+        await call_py.play(
             int(chat_id),
-            AudioPiped(file_path),
+            MediaStream(
+                file_path,
+                video_flags=MediaStream.Flags.IGNORE 
+            )
         )
         return True
     except Exception as e:
@@ -50,9 +51,9 @@ async def play_audio(chat_id, file_path):
 
 async def play_video(chat_id, file_path):
     try:
-        await call_py.join_group_call(
+        await call_py.play(
             int(chat_id),
-            AudioVideoPiped(file_path),
+            MediaStream(file_path)
         )
         return True
     except Exception as e:
@@ -61,7 +62,7 @@ async def play_video(chat_id, file_path):
 
 async def stop_stream(chat_id):
     try:
-        await call_py.leave_group_call(int(chat_id))
+        await call_py.leave_call(int(chat_id))
         return True
     except:
         return False
