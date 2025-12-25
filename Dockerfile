@@ -3,7 +3,7 @@ FROM python:3.10-slim-bookworm
 ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
-# Install Node.js + FFmpeg
+# ─── Install Node.js + FFmpeg ───
 RUN apt-get update && apt-get install -y \
     curl \
     gnupg \
@@ -16,9 +16,11 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# ─── Python Deps ───
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
+# ─── App Code ───
 COPY . .
 CMD ["python", "main.py"]
