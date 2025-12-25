@@ -1,14 +1,15 @@
-# Python 3.10 use karenge (Stable hai)
-FROM python:3.10-slim-buster
+# 1. Naya aur Stable Python Version (Debian 12 Bookworm)
+# Ye "buster" wala error fix karega
+FROM python:3.10-slim-bookworm
 
-# Logs dekhne ke liye setting
+# 2. Logs dekhne ke liye setting
 ENV PYTHONUNBUFFERED=1
 
-# Folder set karo
+# 3. Folder set karo
 WORKDIR /app
 
-# --- SYSTEM DEPENDENCIES (FFmpeg Yahan Install Hoga) ---
-# Ye step server par FFmpeg, Git aur Curl download karega
+# 4. System Tools Install (FFmpeg Zaroori hai)
+# 'bookworm' use karne se apt-get update ka error nahi aayega
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     git \
@@ -17,18 +18,15 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# --- REQUIREMENTS INSTALL ---
-# Pehle requirements copy karo taaki cache use ho sake
+# 5. Requirements Install
 COPY requirements.txt .
+RUN pip3 install --no-cache-dir --upgrade pip
+RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Python libraries install karo
-RUN pip install --no-cache-dir --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
-
-# --- COPY CODE ---
-# Baaki saara code copy karo
+# 6. Saara Code Copy karo
 COPY . .
 
-# --- START COMMAND ---
-# Bot start karne ka command
+# 7. Bot Start Command
+# Tumhare paas 'start' bash script nahi hai, isliye direct python run karenge
 CMD ["python", "main.py"]
+
