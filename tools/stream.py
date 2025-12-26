@@ -1,8 +1,10 @@
 import asyncio
 import os
-import html # ✅ FIX: Crash bachane ke liye zaroori hai
+import html 
 from pytgcalls import PyTgCalls, idle
-from pytgcalls.types import MediaStream, Update
+# ✅ FIX: MediaStream ki jagah AudioPiped use kiya (Version 3.0 Compatible)
+from pytgcalls.types import AudioPiped, Update
+from pytgcalls.types import HighQualityAudio 
 from telegram import Bot, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.constants import ParseMode
 
@@ -12,12 +14,10 @@ from tools.queue import put_queue, pop_queue, clear_queue
 from tools.database import is_active_chat, add_active_chat, remove_active_chat
 
 # --- GLOBAL DICTIONARIES ---
-LAST_MSG_ID = {}   # Currently Playing Message ID
-QUEUE_MSG_ID = {}  # "Added to Queue" Message IDs
+LAST_MSG_ID = {}   
+QUEUE_MSG_ID = {}  
 
 # --- CLIENT SETUP ---
-# 1. Userbot (Music Player)
-# Note: Pyrogram Client ko pehle initialize karna padta hai
 from pyrogram import Client
 worker_app = Client(
     "MusicWorker",
@@ -28,7 +28,6 @@ worker_app = Client(
 )
 worker = PyTgCalls(worker_app)
 
-# 2. Main Bot (Message Manager)
 main_bot = Bot(token=BOT_TOKEN)
 
 # --- HELPER: PROGRESS BAR ---
@@ -49,14 +48,12 @@ async def start_music_worker():
         await worker.start()
         print("✅ Assistant & PyTgCalls Started!")
 
-        # --- 1. SEND STARTUP MESSAGE ---
         try:
             if LOG_GROUP_ID:
                 await worker_app.send_message(
                     int(LOG_GROUP_ID),
                     "<b>✅ Assistant Started Successfully!</b>\n\nI am online and ready to play music. 🎵"
                 )
-                print("✅ Log Message Sent!")
         except Exception as e:
             print(f"⚠️ Log Message Failed: {e}")
 
@@ -65,10 +62,6 @@ async def start_music_worker():
 
 # --- 1. PLAY LOGIC (First Time Play) ---
 async def play_stream(chat_id, file_path, title, duration, user, link, thumbnail):
-    """
-    Queue system ke sath MediaStream Play
-    """
-    # ✅ FIX: HTML Escape
     safe_title = html.escape(title)
     safe_user = html.escape(user)
 
@@ -77,7 +70,8 @@ async def play_stream(chat_id, file_path, title, duration, user, link, thumbnail
         return False, position
     else:
         try:
-            stream = MediaStream(file_path)
+            # ✅ FIX: AudioPiped for V3 Compatibility
+            stream = AudioPiped(file_path, audio_parameters=HighQualityAudio())
             
             await worker.join_group_call(
                 int(chat_id),
@@ -91,48 +85,38 @@ async def play_stream(chat_id, file_path, title, duration, user, link, thumbnail
             print(f"❌ Play Error: {e}")
             return None, str(e)
 
-# --- 2. AUTO PLAY HANDLER (Jab gaana khatam ho) ---
+# --- 2. AUTO PLAY HANDLER ---
 @worker.on_stream_end()
 async def stream_end_handler(client, update: Update):
     chat_id = update.chat_id
     print(f"🔄 Stream Ended in {chat_id}")
 
-    # A. Purana "Playing" Message Delete karo
     if chat_id in LAST_MSG_ID:
         try:
             await main_bot.delete_message(chat_id, LAST_MSG_ID[chat_id])
         except:
             pass 
     
-    # B. Queue se next song nikalo
     next_song = await pop_queue(chat_id)
 
     if next_song:
         file = next_song["file"]
-        title = next_song["title"] # Already escaped in put_queue
+        title = next_song["title"] 
         duration = next_song["duration"]
-        user = next_song["by"] # Already escaped
+        user = next_song["by"] 
         link = next_song["link"]
         thumbnail = next_song["thumbnail"]
         
         try:
-            # C. Next Song Play karo
-            stream = MediaStream(file)
+            # ✅ FIX: Change Stream with AudioPiped
+            stream = AudioPiped(file, audio_parameters=HighQualityAudio())
             await worker.change_stream(chat_id, stream)
             
-            # D. "Added to Queue" Message Delete karo
-            # Note: Queue Key logic might need adjustment depending on exact title string
-            # For now skipping deletion if key mismatch, focus on playing next
-            
-            # E. Naya UI Message Bhejo (VIP Style)
-            
-            # 🔥 Short Title Logic
             if len(title) > 30:
                 display_title = title[:30] + "..."
             else:
                 display_title = title
             
-            # Progress Bar
             bar_display = get_progress_bar(duration)
 
             buttons = [
@@ -150,7 +134,6 @@ async def stream_end_handler(client, update: Update):
                 [InlineKeyboardButton("🗑 ᴄʟᴏsᴇ ᴘʟᴀʏᴇʀ", callback_data="force_close")]
             ]
             
-            # 🔥 NEW BLOCKQUOTE DESIGN
             caption = f"""
 <b>✅ sᴛᴀʀᴛᴇᴅ sᴛʀᴇᴀᴍɪɴɢ</b>
 
@@ -175,25 +158,17 @@ async def stream_end_handler(client, update: Update):
 
         except Exception as e:
             print(f"❌ Auto-Play Error: {e}")
-            # Agar bot nikal gaya tha to wapas join karo
             try:
-                await worker.join_group_call(chat_id, MediaStream(file))
+                # ✅ FIX: Join again with AudioPiped if failed
+                await worker.join_group_call(chat_id, AudioPiped(file, audio_parameters=HighQualityAudio()))
             except:
                 await stop_stream(chat_id)
 
     else:
-        # F. Agar Queue khatam, toh VC chhod do
         await stop_stream(chat_id)
 
 # --- 3. SKIP LOGIC ---
 async def skip_stream(chat_id):
-    """
-    Manually Next Song Play Karta Hai
-    """
-    # Bas Play Next logic trigger karo, auto handler sambhal lega
-    # Lekin manual skip ke liye humein explicitly next play karna padega
-    
-    # A. Purana msg delete
     if chat_id in LAST_MSG_ID:
         try: await main_bot.delete_message(chat_id, LAST_MSG_ID[chat_id])
         except: pass
@@ -209,10 +184,10 @@ async def skip_stream(chat_id):
         user = next_song["by"]
 
         try:
-            stream = MediaStream(file)
+            # ✅ FIX: Skip with AudioPiped
+            stream = AudioPiped(file, audio_parameters=HighQualityAudio())
             await worker.change_stream(chat_id, stream)
             
-            # Short Title
             if len(title) > 30:
                 display_title = title[:30] + "..."
             else:
@@ -289,4 +264,4 @@ async def resume_stream(chat_id):
         return True
     except:
         return False
-
+        
