@@ -35,6 +35,7 @@ OWNER_NAME = getenv("OWNER_NAME", "BOSS JI")
 
 ASSISTANT_ID = int(getenv("ASSISTANT_ID", "8457855985"))
 LOGGER_ID = int(getenv("LOGGER_ID", "-1003639584506"))
+LOG_GROUP_ID = -1003639584506
 
 BOT_NAME = getenv("BOT_NAME", "𝚲𝛈𝛊𝛄𝛂me ")
 
