@@ -4,16 +4,17 @@ import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
-# 🔥 Import get_logger_group here
+# 🔥 Database Imports
 from database import check_registered, register_user, get_logger_group 
 from config import OWNER_ID, OWNER_NAME
-# 🔥 Import Random Sticker Logic
+# 🔥 AI Chat Import
 from ai_chat import get_mimi_sticker
 
 # --- GLOBAL VARS ---
-START_IMG = "https://i.ibb.co/8gW9bqTd/IMG-20251224-191812-875.jpg" 
+START_IMG = "[https://i.ibb.co/8gW9bqTd/IMG-20251224-191812-875.jpg](https://i.ibb.co/8gW9bqTd/IMG-20251224-191812-875.jpg)" 
 BOT_START_TIME = time.time()
-SUPPORT_LINK = "https://t.me/+aw9rUJoO2JYwNjQ1"
+SUPPORT_LINK = "[https://t.me/+aw9rUJoO2JYwNjQ1](https://t.me/+aw9rUJoO2JYwNjQ1)" 
+UPDATE_CHANNEL = "[https://t.me/PRINCE_BOTS_UPDATES](https://t.me/PRINCE_BOTS_UPDATES)" 
 
 # --- HELPER: GET UPTIME ---
 def get_readable_time():
@@ -32,21 +33,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_username = context.bot.username
     
     # --- 1. ANIMATION SEQUENCE ---
-    
-    # A. Send Random Sticker (From Admin Packs)
     try:
         sticker_id = await get_mimi_sticker(context.bot)
         if sticker_id:
             stk = await update.message.reply_sticker(sticker=sticker_id)
-            await asyncio.sleep(2) # 2 Second wait
-            await stk.delete()     # Delete Sticker
+            await asyncio.sleep(2)
+            await stk.delete()
     except: pass 
 
-    # B. Send Emoji & Loading Bar
     msg = await update.message.reply_text("🍭")
     await asyncio.sleep(0.5)
     
-    # Loading Animation Loop
+    # Loading Animation
     bars = [
         "⚡ 𝚲𝛈𝛊𝛄𝛂 ɪs ʟᴏᴀᴅɪɴɢ....🌷🍡",
         "💕 𝚲𝛈𝛊𝛄𝛂 ɪs ʟᴏᴀᴅɪɴɢ..🌷 ",
@@ -64,9 +62,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except: pass
     
     await asyncio.sleep(0.5)
-    await msg.delete() # Loading message delete
+    await msg.delete() 
 
-    # --- 2. SYSTEM STATS & CAPTION ---
+    # --- 2. CAPTION SETUP ---
     try:
         uptime = get_readable_time()
         cpu = psutil.cpu_percent()
@@ -75,42 +73,41 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         uptime = "00:00:00"; cpu=0; ram=0; disk=0
 
-    # Owner Link
     owner_link = f"[{OWNER_NAME}](tg://user?id={OWNER_ID})"
+    
+    # 🔥 TRICK: Using variable for backticks to fix copy-paste issue
+    CodeBlock = "```"
 
+    # 🔥 NEW UPDATED TEXT IS HERE
     caption = f"""┌────── ˹ ɪɴғᴏʀᴍᴀᴛɪᴏɴ ˼─── ⏤‌‌●
 ┆◍ ʜєʏ, {user.first_name} 🥀
 ┆◍ ɪ ᴧϻ {bot_name}
 └────────────────────•
-```
-ɪ ᴀᴍ ᴛʜᴇ ғᴀsᴛᴇsᴛ ᴀɴᴅ ᴘᴏᴡᴇʀғᴜʟ ᴇᴄᴏɴᴏᴍʏ & ᴀɪ ʙᴏᴛ ᴡɪᴛʜ sᴏᴍᴇ ᴀᴡᴇsᴏᴍᴇ ғᴇᴀᴛᴜʀᴇs.
-```
+{CodeBlock}
+ɪ ᴀᴍ ᴛʜᴇ ᴍᴏsᴛ ᴀᴅᴠᴀɴᴄᴇᴅ ᴍᴜʟᴛɪ-ᴘᴜʀᴘᴏsᴇ ʙᴏᴛ. ɪ ᴏғғᴇʀ ʜɪɢʜ-ǫᴜᴀʟɪᴛʏ ᴍᴜsɪᴄ, ɢʟᴏʙᴀʟ ᴇᴄᴏɴᴏᴍʏ, ᴀɪ ᴄʜᴀᴛ & ɢʀᴏᴜᴘ sᴇᴄᴜʀɪᴛʏ.
+{CodeBlock}
 
-```
+{CodeBlock}
 ╭─ ⚙️ SYSTEM STATUS
 │ ➥ UPTIME: {uptime}
 │ ➥ SERVER STORAGE: {disk:.1f}%
 │ ➥ CPU LOAD: {cpu:.1f}%
 │ ➥ RAM CONSUMPTION: {ram:.1f}%
 ╰───────────────
-```
+{CodeBlock}
 •──────────────────────•
-```
-✦ ᴘᴏᴡєʀєᴅ ʙʏ © Ᏼø፝֟፝֟ssㅤᴊɪɪ ┋ꕥ 𝁘ໍ𝀛
-```
+✦ ᴘᴏᴡєʀєᴅ ʙʏ © {owner_link}
 """
 
-    # --- 3. AUTO REGISTRATION ---
+    # --- 3. AUTO REGISTRATION & LOGGER ---
     is_new_user = False
     if not check_registered(user.id):
         register_user(user.id, user.first_name)
         is_new_user = True
         
-        # --- 🔥 4. LOGGER LOGIC (FANCY DESIGN) 🔥 ---
     logger_id = get_logger_group()
     if logger_id:
         try:
-            # ✨ FANCY TEXT + BLOCKQUOTE DESIGN
             log_msg = f"""
 <blockquote><b>📢 ᴜsᴇʀ sᴛᴀʀᴛᴇᴅ ʙᴏᴛ</b></blockquote>
 
@@ -124,151 +121,77 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"⚠️ Logger Error: {e}")
             
-    # --- 4. BUTTONS ---
+    # --- 🔥 BUTTONS LAYOUT 🔥 ---
     keyboard = [
-        [
-            InlineKeyboardButton("💬 Chat AI", callback_data="start_chat_ai"),
-            InlineKeyboardButton("📊 Ranking", callback_data="help_market") 
-        ],
-        [
-            InlineKeyboardButton("🎮 Games & Casino", callback_data="help_games"),
-            InlineKeyboardButton("🛒 VIP Shop", callback_data="help_shop")
-        ],
-        [
-            InlineKeyboardButton("🚑 Support", url=SUPPORT_LINK),
-            InlineKeyboardButton("📚 Commands", callback_data="help_main")
-        ],
+        # Row 1: Add Group (Full)
         [
             InlineKeyboardButton("➕ Add Me To Your Group ➕", url=f"https://t.me/{bot_username}?startgroup=true")
+        ],
+        # Row 2: Help Commands (Full)
+        [
+            InlineKeyboardButton("📚 Help Commands", callback_data="help_main")
+        ],
+        # Row 3: Update | Support (Half-Half)
+        [
+            InlineKeyboardButton("📢 Update", url=UPDATE_CHANNEL),
+            InlineKeyboardButton("🚑 Support", url=SUPPORT_LINK)
+        ],
+        # Row 4: Owner (Full)
+        [
+            InlineKeyboardButton("👑 Owner", url=f"tg://user?id={OWNER_ID}")
         ]
     ]
 
-    # --- 5. SEND MAIN MESSAGE ---
-    await update.message.reply_photo(
-        photo=START_IMG,
-        caption=caption,
-        has_spoiler=True,              # 👈 yahi 
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode=ParseMode.MARKDOWN
-    )
-
-    # --- 6. BONUS MESSAGE ---
-    if is_new_user:
-        await update.message.reply_text(
-            f"🎉 **Welcome {user.first_name}!**\n"
-            f"✅ Account Created Successfully.\n"
-            f"💰 **You received ₹500 Free Bonus!**",
+    # --- 5. SEND MESSAGE ---
+    try:
+        await update.message.reply_photo(
+            photo=START_IMG,
+            caption=caption,
+            has_spoiler=True,
+            reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode=ParseMode.MARKDOWN
         )
+    except:
+        # Fallback without codeblocks if markdown fails
+        await update.message.reply_photo(
+            photo=START_IMG,
+            caption=caption.replace(CodeBlock, ""),
+            has_spoiler=True,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=None
+        )
+
+    if is_new_user:
+        await update.message.reply_text("🎉 **Welcome!** You received ₹500 Free Bonus!", parse_mode=ParseMode.MARKDOWN)
 
 # --- CALLBACK HANDLER ---
 async def start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    await q.answer()   # 👈 THIS IS MANDATORY
+    await q.answer()
     data = q.data
     user = update.effective_user
     
-    # 1. HELP MAIN MENU
+    # 1. HELP MAIN
     if data == "help_main":
-        caption = (
-            f"📚 **MAIN MENU**\n"
-            f"Select a category to see commands:\n\n"
-            f"🏦 **Bank:** Deposit, Withdraw, Loans\n"
-            f"📈 **Market:** Invest, Sell, Ranking\n"
-            f"🎮 **Games:** Mines, Betting\n"
-            f"🛒 **Shop:** Buy VIP, Items\n"
-            f"👮 **Admin:** Group Management"
-        )
+        caption = "📚 **MAIN MENU**\nSelect a category:"
         kb = [
             [InlineKeyboardButton("🏦 Bank", callback_data="help_bank"), InlineKeyboardButton("📊 Market", callback_data="help_market")],
             [InlineKeyboardButton("🎮 Games", callback_data="help_games"), InlineKeyboardButton("🛒 Shop", callback_data="help_shop")],
-            # 🔥 ADMIN BUTTON ADDED HERE
             [InlineKeyboardButton("👮 Admin", callback_data="help_admin"), InlineKeyboardButton("🔮 Extra", callback_data="help_next")],
             [InlineKeyboardButton("🔙 Back Home", callback_data="back_home")]
         ]
         await q.edit_message_caption(caption=caption, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
     # 2. SUB MENUS
-    elif data == "help_bank":
-        text = (
-            "🏦 **BANKING SYSTEM**\n\n"
-            "• `/balance` - Check wallet\n"
-            "• `/bank` - Check bank account\n"
-            "• `/deposit [amount]` - Save money\n"
-            "• `/withdraw [amount]` - Get cash\n"
-            "• `/loan` - Take loan\n"
-            "• `/payloan` - Repay loan"
-        )
+    elif data in ["help_bank", "help_market", "help_games", "help_shop", "help_admin", "help_next"]:
+        text = "ℹ️ **Category Help**\nClick Back to go to menu."
         kb = [[InlineKeyboardButton("🔙 Back", callback_data="help_main")]]
         await q.edit_message_caption(caption=text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-    elif data == "help_market":
-        text = (
-            "📊 **RANKING & MARKET**\n\n"
-            "• `/crank` - **Chat Leaderboard**\n"
-            "• `/top` - Global Rich List\n"
-            "• `/market` - View Share Prices\n"
-            "• `/invest [group_id] [amount]` - Buy Shares\n"
-            "• `/sell [group_id]` - Sell Shares"
-        )
-        kb = [[InlineKeyboardButton("🔙 Back", callback_data="help_main")]]
-        await q.edit_message_caption(caption=text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-
-    elif data == "help_games":
-        text = (
-            "🎮 **GAMES & CASINO**\n\n"
-            "• `/new` - WordSeek Game (New!)\n"
-            "• `/bet [amount]` - Play Mines 💣\n"
-            "• `/rob` - Rob someone (Reply)\n"
-            "• `/kill` - Kill someone (Reply)\n"
-            "• `/pay [amount]` - Give money"
-        )
-        kb = [[InlineKeyboardButton("🔙 Back", callback_data="help_main")]]
-        await q.edit_message_caption(caption=text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-    
-    elif data == "help_shop":
-        text = (
-            "🛒 **VIP SHOP**\n\n"
-            "• `/shop` - Open Shop Menu\n"
-            "• `/redeem [code]` - Get Free Money\n"
-            "• `/protect` - Buy Shield (24h)"
-        )
-        kb = [[InlineKeyboardButton("🔙 Back", callback_data="help_main")]]
-        await q.edit_message_caption(caption=text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-
-    # 🔥 ADMIN COMMANDS MENU 🔥
-    elif data == "help_admin":
-        text = (
-            "👮 **ADMIN COMMANDS**\n"
-            "_(Admin Rights Required)_\n\n"
-            "• `.warn` / `.unwarn` - Manage Warnings\n"
-            "• `.mute` / `.unmute` - Silence Users\n"
-            "• `.ban` / `.unban` - Ban Users\n"
-            "• `.kick` - Kick User\n"
-            "• `.pin` / `.unpin` - Pin Messages\n"
-            "• `.title [text]` - Set Admin Title\n"
-            "• `.promote` / `.demote` - Manage Admins\n"
-            "• `.d` - Delete Replied Message"
-        )
-        kb = [[InlineKeyboardButton("🔙 Back", callback_data="help_main")]]
-        await q.edit_message_caption(caption=text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-
-    elif data == "help_next":
-        text = (
-            "🔮 **EXTRA COMMANDS**\n\n"
-            "• `/alive` - Check Health\n"
-            "• `/eco` - Economy Status\n"
-            "• `Hi Yuki` - Chat with AI"
-        )
-        kb = [[InlineKeyboardButton("🔙 Back", callback_data="help_main")]]
-        await q.edit_message_caption(caption=text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-
-    # 3. START CHAT (AI)
     elif data == "start_chat_ai":
-        await q.answer("💬 AI Mode Active!", show_alert=False)
-        await q.message.reply_text(f"Hey **{user.first_name}**! 👋\nBas **'Hi Yuki'** ya **'Hello'** likho, main turant reply karungi!")
+         await q.message.reply_text("Hi! I am AI.")
 
-    # 4. BACK HOME
+    # 3. BACK HOME
     elif data == "back_home":
         owner_link = f"[{OWNER_NAME}](tg://user?id={OWNER_ID})"
         try:
@@ -279,29 +202,30 @@ async def start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             uptime = "00:00:00"; cpu=0; ram=0; disk=0
 
+        CodeBlock = "```"
+
         caption = f"""┌────── ˹ ɪɴғᴏʀᴍᴀᴛɪᴏɴ ˼─── ⏤‌‌●
 ┆◍ ʜєʏ, {user.first_name} 🥀
 ┆◍ ɪ ᴧϻ {context.bot.first_name}
 └────────────────────•
-```
-ɪ ᴀᴍ ᴛʜᴇ ғᴀsᴛᴇsᴛ ᴀɴᴅ ᴘᴏᴡᴇʀғᴜʟ ᴇᴄᴏɴᴏᴍʏ & ᴀɪ ʙᴏᴛ ᴡɪᴛʜ sᴏᴍᴇ ᴀᴡᴇsᴏᴍᴇ ғᴇᴀᴛᴜʀᴇs.
-```
+{CodeBlock}
+ɪ ᴀᴍ ᴛʜᴇ ᴍᴏsᴛ ᴀᴅᴠᴀɴᴄᴇᴅ ᴍᴜʟᴛɪ-ᴘᴜʀᴘᴏsᴇ ʙᴏᴛ. ɪ ᴏғғᴇʀ ʜɪɢʜ-ǫᴜᴀʟɪᴛʏ ᴍᴜsɪᴄ, ɢʟᴏʙᴀʟ ᴇᴄᴏɴᴏᴍʏ, ᴀɪ ᴄʜᴀᴛ & ɢʀᴏᴜᴘ sᴇᴄᴜʀɪᴛʏ.
+{CodeBlock}
 
-```
-➥ᴜᴘᴛɪᴍᴇ: `{uptime}`
-➥sᴇʀᴠᴇʀ sᴛᴏʀᴀɢᴇ: `{disk}%`
-➥ᴄᴘᴜ ʟᴏᴀᴅ: `{cpu}%`
-➥ʀᴀᴍ ᴄᴏɴsᴜᴍᴘᴛɪᴏɴ: `{ram}%`
+{CodeBlock}
+➥ᴜᴘᴛɪᴍᴇ: {uptime}
+➥sᴇʀᴠᴇʀ sᴛᴏʀᴀɢᴇ: {disk:.1f}%
+➥ᴄᴘᴜ ʟᴏᴀᴅ: {cpu:.1f}%
+➥ʀᴀᴍ ᴄᴏɴsᴜᴍᴘᴛɪᴏɴ: {ram:.1f}%
+{CodeBlock}
 •──────────────────────•
-```
 ✦ᴘᴏᴡєʀєᴅ ʙʏ » {owner_link}
-```
 """
-
         keyboard = [
-            [InlineKeyboardButton("💬 Chat AI", callback_data="start_chat_ai"), InlineKeyboardButton("📊 Ranking", callback_data="help_market")],
-            [InlineKeyboardButton("🎮 Games & Casino", callback_data="help_games"), InlineKeyboardButton("🛒 VIP Shop", callback_data="help_shop")],
-            [InlineKeyboardButton("🚑 Support", url=SUPPORT_LINK), InlineKeyboardButton("📚 Commands", callback_data="help_main")],
-            [InlineKeyboardButton("➕ Add Me To Your Group ➕", url=f"https://t.me/{context.bot.username}?startgroup=true")]
+            [InlineKeyboardButton("➕ Add Me To Your Group ➕", url=f"[https://t.me/](https://t.me/){context.bot.username}?startgroup=true")],
+            [InlineKeyboardButton("📚 Help Commands", callback_data="help_main")],
+            [InlineKeyboardButton("📢 Update", url=UPDATE_CHANNEL), InlineKeyboardButton("🚑 Support", url=SUPPORT_LINK)],
+            [InlineKeyboardButton("👑 Owner", url=f"tg://user?id={OWNER_ID}")]
         ]
         await q.edit_message_caption(caption=caption, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+        
