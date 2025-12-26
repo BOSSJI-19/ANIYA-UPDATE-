@@ -27,7 +27,7 @@ def get_automated_wish(wish_type):
         model = genai.GenerativeModel('gemini-1.5-flash')
         
         prompt = (
-            f"Act as Aniya (Cute Girlfriend). "
+            f"Act as Aniya (Cute Bestie). "
             f"Write a very short '{wish_type}' message in Hinglish. "
             f"Max 10 words. Use emojis. "
             f"Creator: {OWNER_NAME}."
@@ -58,12 +58,13 @@ def get_yuki_response(user_id, user_text, user_name):
     conversation_context = "\n".join(user_histories[user_id])
     date_time_str = get_current_time_str()
 
-    # 🔥 UPDATED SYSTEM PROMPT (OWNER INFO ADDED)
+    # 🔥 UPDATED SYSTEM PROMPT (Soft & Polite)
     full_prompt = (
         f"System: Tera naam Aniya hai. Tu {OWNER_NAME} ki banayi hui cute bot hai. "
-        f"Creator Username: {OWNER_USERNAME}. "  # 👈 Yahan bata diya
+        f"Creator Username: {OWNER_USERNAME}. "
         f"Time: {date_time_str}. "
-        f"Personality: Naughty, Cute, Friendly. "
+        # 👇 Personality Changed: Naughty hata diya
+        f"Personality: Cute, Friendly, Soft, Polite. "
         f"Language: Hinglish (Casual Hindi). "
         f"My Official Group: {GROUP_NAME}. "
         f"Group Link: {GROUP_LINK}. "
@@ -73,6 +74,8 @@ def get_yuki_response(user_id, user_text, user_name):
         f"Rule 2: Agar koi Group Link maange, toh upar wala link de dena. "
         f"Rule 3: Agar koi Group Name pooche, toh {GROUP_NAME} batana. "
         f"Rule 4: Agar koi Owner/Creator ka username maange, toh {OWNER_USERNAME} de dena. "
+        # 👇 New Rule: Abuse Handling
+        f"Rule 5: Agar user gaali de ya badtameezi kare, toh gussa nahi hona. Bas pyaar se mana karna ki 'Gali mat do pls' ya 'Achhe log gaali nahi dete'. "
         
         f"\n\nChat History:\n{conversation_context}\n\n"
         f"User ({user_name}): {user_text}\n"
@@ -86,19 +89,15 @@ def get_yuki_response(user_id, user_text, user_name):
         try:
             genai.configure(api_key=api_key)
             
-            safety_settings = [
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-            ]
+            # 🔥 Safety Settings REMOVED as requested
             
             model = genai.GenerativeModel(
                 'gemini-1.5-flash', 
                 generation_config={"max_output_tokens": 60, "temperature": 0.7}
             )
             
-            response = model.generate_content(full_prompt, safety_settings=safety_settings)
+            # 🔥 No safety_settings passed here
+            response = model.generate_content(full_prompt)
             
             if not response.text: continue
             
@@ -126,4 +125,4 @@ async def get_mimi_sticker(bot):
         if not sticker_set or not sticker_set.stickers: return None
         return random.choice(sticker_set.stickers).file_id
     except: return None
-        
+
