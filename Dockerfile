@@ -1,20 +1,31 @@
-# Pre-built Image (Python 3.10 + Node.js 19)
-FROM nikolaik/python-nodejs:python3.10-nodejs19-bullseye
+# Base Image: Python 3.10 (Stable Version)
+FROM python:3.10-slim-bullseye
 
-# FFmpeg install karna zaroori hai music play karne ke liye
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
-    && apt-get clean \
+# Folder Setup
+WORKDIR /app
+
+# 1. System Updates & Basic Tools
+RUN apt-get update && apt-get install -y \
+    git \
+    wget \
+    curl \
+    gnupg \
+    unzip \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Code copy setup
-COPY . /app/
-WORKDIR /app/
+# 2. Install Node.js 20 (Manual Method)
+# Ye method ensure karta hai ki 'node' command har jagah available ho
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g npm@latest
 
-# Requirements install
-RUN pip3 install --no-cache-dir --upgrade --requirement requirements.txt
+# 3. Python Requirements
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir --upgrade pip
+RUN pip3 install --no-cache-dir -r requirements.txt
 
-# --- START COMMAND ---
-# Humara main file 'main.py' hai, isliye ye command use karenge
+# 4. Copy Code & Start
+COPY . .
 CMD ["python", "main.py"]
 
