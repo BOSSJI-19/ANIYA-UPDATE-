@@ -10,7 +10,8 @@ from tools.controller import process_stream
 # Worker import kiya taaki join karwa sakein
 from tools.stream import stop_stream, skip_stream, pause_stream, resume_stream, worker 
 from tools.stream import LAST_MSG_ID, QUEUE_MSG_ID 
-from config import OWNER_NAME, ASSISTANT_ID 
+# ✅ FIX: Config se Instagram aur BotName import kiya
+from config import OWNER_NAME, ASSISTANT_ID, INSTAGRAM_LINK, BOT_NAME
 
 # --- PLAY COMMAND (/play) ---
 async def play_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -22,7 +23,6 @@ async def play_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except: pass 
 
     if not context.args:
-        # Check for reply (File) logic future ke liye, abhi basic usage
         temp = await context.bot.send_message(chat.id, "<blockquote>❌ <b>Usage:</b> /play [Song Name]</blockquote>", parse_mode=ParseMode.HTML)
         await asyncio.sleep(5)
         try: await temp.delete()
@@ -34,72 +34,66 @@ async def play_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. Searching Message
     status_msg = await context.bot.send_message(
         chat.id,
-        f"<blockquote>🔍 <b>Searching...</b>\n<code>{query}</code></blockquote>", 
+        f"<blockquote>🔍 <b>sᴇᴀʀᴄʜɪɴɢ...</b>\n<code>{query}</code></blockquote>", 
         parse_mode=ParseMode.HTML
     )
     await context.bot.send_chat_action(chat_id=chat.id, action=ChatAction.TYPING)
 
-    # --- 🔥 ASSISTANT CHECK & AUTO JOIN LOGIC ---
+    # --- 🔥 VC CHECK & ASSISTANT JOIN LOGIC ---
     try:
         # Step A: Check if Assistant is in Group
-        # Note: ASSISTANT_ID config.py me hona chahiye (Integer)
         try:
             assistant_member = await chat.get_member(int(ASSISTANT_ID))
             
             # Step B: Agar Assistant Ban hai
             if assistant_member.status in ["kicked", "banned"]:
                 await status_msg.edit_text(
-                    f"<blockquote>❌ <b>Assistant Banned</b></blockquote>\nAssistant is banned in {chat.title}.\nUnban it to play music.",
+                    f"<blockquote>❌ <b>ᴀssɪsᴛᴀɴᴛ ʙᴀɴɴᴇᴅ</b></blockquote>\nAssistant is banned in {chat.title}.\nUnban it to play music.",
                     parse_mode=ParseMode.HTML,
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔓 Unban Assistant", callback_data="unban_assistant")]])
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🗑 ᴄʟᴏsᴇ", callback_data="force_close")]])
                 )
                 return
         except ValueError:
              print("⚠️ Config Error: ASSISTANT_ID integer nahi hai.")
+        except:
+             pass # Assistant check fail (maybe not added yet), continue to join
 
-    except TelegramError:
-        # Step C: Agar Assistant Group mein nahi hai (Member not found error)
+        # Step C: Try to Join VC (VC Check)
         try:
-            await status_msg.edit_text("<blockquote>🔄 <b>Assistant Joining...</b></blockquote>", parse_mode=ParseMode.HTML)
-            
-            # 1. Link Generate karo
             invite_link = await context.bot.export_chat_invite_link(chat.id)
-            
-            # 2. Assistant ko join karwao (Using worker/app client)
-            try:
-                await worker.join_chat(invite_link)
-            except Exception as e:
-                # Kabhi kabhi wo already join hota hai par cache update nahi hota
-                print(f"Join Warning: {e}")
-            
-            # 3. Thoda wait karo taaki Telegram process kar le
-            await asyncio.sleep(2)
-            
+            await worker.join_chat(invite_link)
         except Exception as e:
-            return await status_msg.edit_text(
-                f"<blockquote>❌ <b>Assistant Join Error</b></blockquote>\nMake me <b>Admin</b> with Invite Users permission.\n\nError: <code>{e}</code>",
-                parse_mode=ParseMode.HTML
+            # 🔥 AGAR VC OFF HAI TO YE CHALEGA
+            await status_msg.edit_text(
+                "<blockquote>❌ <b>ᴠᴏɪᴄᴇ ᴄʜᴀᴛ ɪs ᴏғғ</b></blockquote>\n\n<b>Please Turn ON the Voice Chat first!</b>\n<i>Video Chat / Live Stream start karo.</i>",
+                parse_mode=ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🗑 ᴄʟᴏsᴇ", callback_data="force_close")]])
             )
+            return
+
+    except Exception as e:
+        print(f"Join Error: {e}")
 
     # --- CONTROLLER LOGIC ---
     error, data = await process_stream(chat.id, user.first_name, query)
 
     if error:
-        await status_msg.edit_text(f"<blockquote>❌ {error}</blockquote>", parse_mode=ParseMode.HTML)
-        await asyncio.sleep(5)
-        try: await status_msg.delete()
-        except: pass
+        await status_msg.edit_text(
+            f"<blockquote>❌ <b>ᴇʀʀᴏʀ</b></blockquote>\n{error}", 
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🗑 ᴄʟᴏsᴇ", callback_data="force_close")]])
+        )
         return
 
     # Data Extract & Safety Fix
-    # ✅ FIX: HTML Escape (Title aur Name ko safe banao taaki crash na ho)
     safe_title = html.escape(data["title"])
     safe_user = html.escape(data["user"])
     
     duration = data["duration"]
     link = data["link"]
-    img_url = data.get("thumbnail", data.get("img_url")) # Fallback check
+    img_url = data.get("thumbnail", data.get("img_url")) 
     
+    # 🔥 UPDATED BUTTONS (Insta + Close added)
     buttons = [
         [
             InlineKeyboardButton("II", callback_data="music_pause"),
@@ -107,49 +101,51 @@ async def play_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("‣‣I", callback_data="music_skip"),
             InlineKeyboardButton("▢", callback_data="music_stop")
         ],
-        [InlineKeyboardButton("📺 Watch on YouTube", url=link)]
+        [
+            InlineKeyboardButton("📺 ʏᴏᴜᴛᴜʙᴇ", url=link),
+            InlineKeyboardButton(f"📸 ɪɴsᴛᴀɢʀᴀᴍ", url=INSTAGRAM_LINK)
+        ],
+        [
+            InlineKeyboardButton("🗑 ᴄʟᴏsᴇ ᴘʟᴀʏᴇʀ", callback_data="force_close")
+        ]
     ]
     markup = InlineKeyboardMarkup(buttons)
 
     # --- MESSAGE SENDING LOGIC ---
-    # Delete old Searching msg
     try: await status_msg.delete()
     except: pass
 
-    # Caption Prep
     if data["status"] is True:
         # Purana player delete agar exist kare
         if chat.id in LAST_MSG_ID:
             try: await context.bot.delete_message(chat.id, LAST_MSG_ID[chat.id])
             except: pass
-            
+        
+        # 🔥 FANCY TEXT CAPTION
         caption = f"""
-<blockquote><b>✅ Started Streaming</b></blockquote>
+<blockquote><b>✅ sᴛᴀʀᴛᴇᴅ sᴛʀᴇᴀᴍɪɴɢ</b></blockquote>
 
-<b>📌 Title :</b> <a href="{link}">{safe_title}</a>
-<b>⏱ Duration :</b> <code>{duration}</code>
-<b>👤 Req By :</b> {safe_user}
+<b>🎸 ᴛɪᴛʟᴇ :</b> <a href="{link}">{safe_title}</a>
+<b>⏳ ᴅᴜʀᴀᴛɪᴏɴ :</b> <code>{duration}</code>
+<b>👤 ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ :</b> {safe_user}
 
-<b>⚡ Powered By :</b> {OWNER_NAME}
+<b>⚡ ᴘᴏᴡᴇʀᴇᴅ ʙʏ :</b> {OWNER_NAME}
 """
         try:
             msg = await context.bot.send_photo(chat.id, photo=img_url, caption=caption, has_spoiler=True, reply_markup=markup, parse_mode=ParseMode.HTML)
             LAST_MSG_ID[chat.id] = msg.message_id
         except Exception as e:
-            # Fallback agar photo fail ho
             await context.bot.send_message(chat.id, caption, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
     else:
-        # Queue Logic
+        # Queue Logic (Fancy Text)
         caption = f"""
-<blockquote><b>📝 Added to Queue</b></blockquote>
+<blockquote><b>📝 ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ</b></blockquote>
 
-<b>📌 Title :</b> <a href="{link}">{safe_title}</a>
-<b>🔢 Position :</b> <code>#{data['position']}</code>
-<b>⏱ Duration :</b> <code>{duration}</code>
-<b>👤 Req By :</b> {safe_user}
-
-<b>⚡ Powered By :</b> {OWNER_NAME}
+<b>🎸 ᴛɪᴛʟᴇ :</b> <a href="{link}">{safe_title}</a>
+<b>🔢 ᴘᴏsɪᴛɪᴏɴ :</b> <code>#{data['position']}</code>
+<b>⏳ ᴅᴜʀᴀᴛɪᴏɴ :</b> <code>{duration}</code>
+<b>👤 ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ :</b> {safe_user}
 """
         q_msg = await context.bot.send_photo(chat.id, photo=img_url, caption=caption, has_spoiler=True, reply_markup=markup, parse_mode=ParseMode.HTML)
         key = f"{chat.id}-{safe_title}"
@@ -161,7 +157,6 @@ async def unban_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     chat = update.effective_chat
     
-    # Admin Check (Ispe rakhna padega kyunki unban sirf admin kar sakta hai)
     user = await chat.get_member(query.from_user.id)
     if user.status not in ["creator", "administrator"]:
         return await query.answer("❌ Sirf Admin Unban kar sakta hai!", show_alert=True)
@@ -173,34 +168,28 @@ async def unban_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer(f"Error: {e}", show_alert=True)
 
 # --- COMMANDS (STOP/SKIP/PAUSE/RESUME) ---
-# 🔓 NO ADMIN CHECK HERE (As requested)
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    command = update.message.text.split()[0].replace("/", "").lower() # Command nikalo
+    command = update.message.text.split()[0].replace("/", "").lower()
     
     try: await update.message.delete()
     except: pass
     
     msg_text = ""
-    
-    # Logic distribute karo
+    # Fancy Replies
     if command in ["stop", "end"]:
         await stop_stream(chat_id)
-        msg_text = "<blockquote>⏹ <b>Stopped.</b></blockquote>"
-        
+        msg_text = "<blockquote>⏹ <b>sᴛʀᴇᴀᴍ sᴛᴏᴘᴘᴇᴅ</b></blockquote>"
     elif command in ["skip", "next"]:
         await skip_stream(chat_id)
-        msg_text = "<blockquote>⏭ <b>Skipped.</b></blockquote>"
-        
+        msg_text = "<blockquote>⏭ <b>sᴋɪᴘᴘᴇᴅ</b></blockquote>"
     elif command == "pause":
         await pause_stream(chat_id)
-        msg_text = "<blockquote>II <b>Paused.</b></blockquote>"
-        
+        msg_text = "<blockquote>II <b>sᴛʀᴇᴀᴍ ᴘᴀᴜsᴇᴅ</b></blockquote>"
     elif command == "resume":
         await resume_stream(chat_id)
-        msg_text = "<blockquote>▶ <b>Resumed.</b></blockquote>"
+        msg_text = "<blockquote>▶ <b>sᴛʀᴇᴀᴍ ʀᴇsᴜᴍᴇᴅ</b></blockquote>"
 
-    # Message update (Last player remove)
     if chat_id in LAST_MSG_ID:
         try: await context.bot.delete_message(chat_id, LAST_MSG_ID[chat_id])
         except: pass
