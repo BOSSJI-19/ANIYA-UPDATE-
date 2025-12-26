@@ -4,34 +4,35 @@ from tools.database import get_db_queue, save_db_queue, clear_db_queue
 
 QUEUE_LIMIT = 50
 
-
-async def put_queue(chat_id, file, title, duration, user, stream_type="audio"):
+async def put_queue(chat_id, file, title, duration, user, link, thumbnail, stream_type="audio"):
     """
-    Song ko queue mein add karta hai aur database update karta hai.
+    Song ko queue mein add karta hai (With Thumbnail & Link support).
     """
-
-    # 🔒 SAFETY: file MUST be string path
+    
+    # 🔒 SAFETY: Check karo file path sahi hai ya nahi
     if not isinstance(file, str):
-        raise ValueError(f"Queue Error: file must be string path, got {type(file)}")
+        print(f"❌ Queue Error: File path text nahi hai! ({type(file)})")
+        return {"error": "File Error"}
 
-    # ✅ FIX: await added
     queue = await get_db_queue(chat_id)
 
     if len(queue) >= QUEUE_LIMIT:
         return {"error": "Queue Full"}
 
+    # 🔥 IMPORTANT: Link aur Thumbnail bhi save kar rahe hain ab
     song = {
         "title": title,
-        "file": str(file),      # ensure string
+        "file": str(file),
         "duration": duration,
         "by": user,
+        "link": link,          # ✅ Added for Next Song
+        "thumbnail": thumbnail, # ✅ Added for Next Song
         "streamtype": stream_type,
         "played": 0,
     }
 
     queue.append(song)
 
-    # ✅ FIX: await added
     await save_db_queue(chat_id, queue)
 
     return len(queue) - 1
@@ -39,38 +40,40 @@ async def put_queue(chat_id, file, title, duration, user, stream_type="audio"):
 
 async def pop_queue(chat_id):
     """
-    Current song hataata hai aur next deta hai
+    Current song hataata hai aur next song return karta hai.
     """
-
-    # ✅ FIX: await added
     queue = await get_db_queue(chat_id)
 
     if not queue:
         return None
 
-    # Remove current song
+    # 1. Jo baj raha tha use hatao (First item)
     queue.pop(0)
 
-    # ✅ FIX: await added
+    # 2. Database update karo
     await save_db_queue(chat_id, queue)
 
+    # 3. Agar queue mein aur gaane bache hain, toh agla return karo
     if queue:
         next_song = queue[0]
 
-        # 🔒 DOUBLE SAFETY
+        # Safety Check
         if not isinstance(next_song.get("file"), str):
-            raise ValueError("Queue Corrupted: file is not string")
+            print("❌ Queue Corrupted: Next song file path missing.")
+            return None
 
         return next_song
 
     return None
 
-
 async def get_queue(chat_id):
-    # ✅ FIX: await added
     return await get_db_queue(chat_id)
 
-
 async def clear_queue(chat_id):
-    # ✅ FIX: await added
+    """
+    Chupchap database se queue saaf kar dega.
+    (Koi message nahi bhejega)
+    """
     await clear_db_queue(chat_id)
+    print(f"🧹 Queue Cleared Silently for {chat_id}")
+    
