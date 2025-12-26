@@ -1,5 +1,5 @@
 import asyncio
-import html  # ✅ IMP: Crash fix karne ke liye
+import html
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 from telegram.constants import ParseMode, ChatAction
@@ -7,11 +7,9 @@ from telegram.error import TelegramError
 
 # Imports
 from tools.controller import process_stream
-# Worker import kiya taaki join karwa sakein
 from tools.stream import stop_stream, skip_stream, pause_stream, resume_stream, worker 
 from tools.stream import LAST_MSG_ID, QUEUE_MSG_ID 
-# ✅ FIX: Config se Instagram aur BotName import kiya
-from config import OWNER_NAME, ASSISTANT_ID, INSTAGRAM_LINK, BOT_NAME
+from config import OWNER_NAME, ASSISTANT_ID, INSTAGRAM_LINK, BOT_NAME 
 
 # --- PLAY COMMAND (/play) ---
 async def play_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -44,8 +42,6 @@ async def play_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Step A: Check if Assistant is in Group
         try:
             assistant_member = await chat.get_member(int(ASSISTANT_ID))
-            
-            # Step B: Agar Assistant Ban hai
             if assistant_member.status in ["kicked", "banned"]:
                 await status_msg.edit_text(
                     f"<blockquote>❌ <b>ᴀssɪsᴛᴀɴᴛ ʙᴀɴɴᴇᴅ</b></blockquote>\nAssistant is banned in {chat.title}.\nUnban it to play music.",
@@ -53,26 +49,29 @@ async def play_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🗑 ᴄʟᴏsᴇ", callback_data="force_close")]])
                 )
                 return
-        except ValueError:
-             print("⚠️ Config Error: ASSISTANT_ID integer nahi hai.")
-        except:
-             pass # Assistant check fail (maybe not added yet), continue to join
+        except: pass
 
-        # Step C: Try to Join VC (VC Check)
+        # Step B: Try to Join VC
         try:
             invite_link = await context.bot.export_chat_invite_link(chat.id)
             await worker.join_chat(invite_link)
         except Exception as e:
-            # 🔥 AGAR VC OFF HAI TO YE CHALEGA
-            await status_msg.edit_text(
-                "<blockquote>❌ <b>ᴠᴏɪᴄᴇ ᴄʜᴀᴛ ɪs ᴏғғ</b></blockquote>\n\n<b>Please Turn ON the Voice Chat first!</b>\n<i>Video Chat / Live Stream start karo.</i>",
-                parse_mode=ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🗑 ᴄʟᴏsᴇ", callback_data="force_close")]])
-            )
-            return
+            # 🔥 CRITICAL FIX: Ignore 'Already Participant' Error
+            err_str = str(e).lower()
+            if "already" in err_str or "participant" in err_str:
+                pass # Already joined, so ignore error
+            else:
+                # Real VC Error
+                print(f"⚠️ Join Error: {e}")
+                await status_msg.edit_text(
+                    "<blockquote>❌ <b>ᴠᴏɪᴄᴇ ᴄʜᴀᴛ ɪs ᴏғғ</b></blockquote>\n\n<b>Please Turn ON the Voice Chat first!</b>\n<i>Video Chat / Live Stream start karo.</i>",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🗑 ᴄʟᴏsᴇ", callback_data="force_close")]])
+                )
+                return
 
     except Exception as e:
-        print(f"Join Error: {e}")
+        print(f"Main Logic Error: {e}")
 
     # --- CONTROLLER LOGIC ---
     error, data = await process_stream(chat.id, user.first_name, query)
@@ -85,15 +84,22 @@ async def play_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Data Extract & Safety Fix
-    safe_title = html.escape(data["title"])
+    # Data Extract & Shortening Title
+    raw_title = data["title"]
+    # 🔥 SHORT TITLE LOGIC (Max 30 Chars)
+    if len(raw_title) > 30:
+        short_title = raw_title[:30] + "..."
+    else:
+        short_title = raw_title
+
+    safe_title = html.escape(short_title)
     safe_user = html.escape(data["user"])
     
     duration = data["duration"]
     link = data["link"]
     img_url = data.get("thumbnail", data.get("img_url")) 
     
-    # 🔥 UPDATED BUTTONS (Insta + Close added)
+    # 🔥 BUTTONS
     buttons = [
         [
             InlineKeyboardButton("II", callback_data="music_pause"),
@@ -116,18 +122,17 @@ async def play_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except: pass
 
     if data["status"] is True:
-        # Purana player delete agar exist kare
         if chat.id in LAST_MSG_ID:
             try: await context.bot.delete_message(chat.id, LAST_MSG_ID[chat.id])
             except: pass
         
-        # 🔥 FANCY TEXT CAPTION
+        # 🔥 FANCY TEXT CAPTION (Title in Blockquote)
         caption = f"""
-<blockquote><b>✅ sᴛᴀʀᴛᴇᴅ sᴛʀᴇᴀᴍɪɴɢ</b></blockquote>
+<b>✅ sᴛᴀʀᴛᴇᴅ sᴛʀᴇᴀᴍɪɴɢ</b>
 
-<b>🎸 ᴛɪᴛʟᴇ :</b> <a href="{link}">{safe_title}</a>
+<blockquote><b>🎸 ᴛɪᴛʟᴇ :</b> <a href="{link}">{safe_title}</a>
 <b>⏳ ᴅᴜʀᴀᴛɪᴏɴ :</b> <code>{duration}</code>
-<b>👤 ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ :</b> {safe_user}
+<b>👤 ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ :</b> {safe_user}</blockquote>
 
 <b>⚡ ᴘᴏᴡᴇʀᴇᴅ ʙʏ :</b> {OWNER_NAME}
 """
@@ -138,14 +143,14 @@ async def play_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat.id, caption, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
     else:
-        # Queue Logic (Fancy Text)
+        # Queue Caption
         caption = f"""
-<blockquote><b>📝 ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ</b></blockquote>
+<b>📝 ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ</b>
 
-<b>🎸 ᴛɪᴛʟᴇ :</b> <a href="{link}">{safe_title}</a>
+<blockquote><b>🎸 ᴛɪᴛʟᴇ :</b> <a href="{link}">{safe_title}</a>
 <b>🔢 ᴘᴏsɪᴛɪᴏɴ :</b> <code>#{data['position']}</code>
 <b>⏳ ᴅᴜʀᴀᴛɪᴏɴ :</b> <code>{duration}</code>
-<b>👤 ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ :</b> {safe_user}
+<b>👤 ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ :</b> {safe_user}</blockquote>
 """
         q_msg = await context.bot.send_photo(chat.id, photo=img_url, caption=caption, has_spoiler=True, reply_markup=markup, parse_mode=ParseMode.HTML)
         key = f"{chat.id}-{safe_title}"
@@ -167,7 +172,7 @@ async def unban_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await query.answer(f"Error: {e}", show_alert=True)
 
-# --- COMMANDS (STOP/SKIP/PAUSE/RESUME) ---
+# --- COMMANDS ---
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     command = update.message.text.split()[0].replace("/", "").lower()
@@ -176,7 +181,6 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except: pass
     
     msg_text = ""
-    # Fancy Replies
     if command in ["stop", "end"]:
         await stop_stream(chat_id)
         msg_text = "<blockquote>⏹ <b>sᴛʀᴇᴀᴍ sᴛᴏᴘᴘᴇᴅ</b></blockquote>"
@@ -204,4 +208,4 @@ def register_handlers(app):
     app.add_handler(CommandHandler(["stop", "end", "skip", "next", "pause", "resume"], stop_command))
     app.add_handler(CallbackQueryHandler(unban_cb, pattern="unban_assistant"))
     print("  ✅ Music Module Loaded: Auto-Join & Anti-Ban!")
-    
+
