@@ -6,14 +6,18 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 # 🔥 Import get_logger_group here
 from database import check_registered, register_user, get_logger_group 
-from config import OWNER_ID, OWNER_NAME
+from config import OWNER_ID, OWNER_NAME, SUPPORT_CHAT, UPDATE_CHANNEL
 # 🔥 Import Random Sticker Logic
 from ai_chat import get_mimi_sticker
 
 # --- GLOBAL VARS ---
 START_IMG = "https://i.ibb.co/8gW9bqTd/IMG-20251224-191812-875.jpg" 
 BOT_START_TIME = time.time()
-SUPPORT_LINK = "https://t.me/+aw9rUJoO2JYwNjQ1"
+
+# Support link - config से या default
+SUPPORT_LINK = SUPPORT_CHAT if SUPPORT_CHAT else "https://t.me/+aw9rUJoO2JYwNjQ1"
+# Update link - config से या default
+UPDATE_LINK = UPDATE_CHANNEL if UPDATE_CHANNEL else "https://t.me/TechInsightBotz"
 
 # --- HELPER: GET UPTIME ---
 def get_readable_time():
@@ -75,29 +79,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         uptime = "00:00:00"; cpu=0; ram=0; disk=0
 
-    # Owner Link
-    owner_link = f"[{OWNER_NAME}](tg://user?id={OWNER_ID})"
-
     caption = f"""┌────── ˹ ɪɴғᴏʀᴍᴀᴛɪᴏɴ ˼─── ⏤‌‌●
 ┆◍ ʜєʏ, {user.first_name} 🥀
 ┆◍ ɪ ᴧϻ {bot_name}
 └────────────────────•
-```
-ɪ ᴀᴍ ᴛʜᴇ ғᴀsᴛᴇsᴛ ᴀɴᴅ ᴘᴏᴡᴇʀғᴜʟ ᴇᴄᴏɴᴏᴍʏ & ᴀɪ ʙᴏᴛ ᴡɪᴛʜ sᴏᴍᴇ ᴀᴡᴇsᴏᴍᴇ ғᴇᴀᴛᴜʀᴇs.
-```
 
-```
+ɪ ᴀᴍ ᴛʜᴇ ғᴀsᴛᴇsᴛ ᴀɴᴅ ᴘᴏᴡᴇʀғᴜʟ ᴇᴄᴏɴᴏᴍʏ & ᴀɪ ʙᴏᴛ ᴡɪᴛʜ sᴏᴍᴇ ᴀᴡᴇsᴏᴍᴇ ғᴇᴀᴛᴜʀᴇs.
+
+
+
 ╭─ ⚙️ SYSTEM STATUS
 │ ➥ UPTIME: {uptime}
 │ ➥ SERVER STORAGE: {disk:.1f}%
 │ ➥ CPU LOAD: {cpu:.1f}%
 │ ➥ RAM CONSUMPTION: {ram:.1f}%
 ╰───────────────
-```
+
 •──────────────────────•
-```
+
 ✦ ᴘᴏᴡєʀєᴅ ʙʏ © Ᏼø፝֟፝֟ssㅤᴊɪɪ ┋ꕥ 𝁘ໍ𝀛
-```
 """
 
     # --- 3. AUTO REGISTRATION ---
@@ -106,7 +106,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         register_user(user.id, user.first_name)
         is_new_user = True
         
-        # --- 🔥 4. LOGGER LOGIC (FANCY DESIGN) 🔥 ---
+    # --- 🔥 4. LOGGER LOGIC (FANCY DESIGN) 🔥 ---
     logger_id = get_logger_group()
     if logger_id:
         try:
@@ -124,22 +124,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"⚠️ Logger Error: {e}")
             
-    # --- 4. BUTTONS ---
+    # --- 4. BUTTONS (NEW LAYOUT) ---
     keyboard = [
         [
-            InlineKeyboardButton("💬 Chat AI", callback_data="start_chat_ai"),
-            InlineKeyboardButton("📊 Ranking", callback_data="help_market") 
+            InlineKeyboardButton("[.        Add Group              .]", 
+                                 url=f"https://t.me/{bot_username}?startgroup=true")
         ],
         [
-            InlineKeyboardButton("🎮 Games & Casino", callback_data="help_games"),
-            InlineKeyboardButton("🛒 VIP Shop", callback_data="help_shop")
+            InlineKeyboardButton("{.      Help Commands            ]", 
+                                 callback_data="help_main")
         ],
         [
-            InlineKeyboardButton("🚑 Support", url=SUPPORT_LINK),
-            InlineKeyboardButton("📚 Commands", callback_data="help_main")
+            InlineKeyboardButton("[Update]", url=UPDATE_LINK),
+            InlineKeyboardButton("[Support]", url=SUPPORT_LINK)
         ],
         [
-            InlineKeyboardButton("➕ Add Me To Your Group ➕", url=f"https://t.me/{bot_username}?startgroup=true")
+            InlineKeyboardButton("[.          Owner              .]", 
+                                 url=f"tg://user?id={OWNER_ID}")
         ]
     ]
 
@@ -147,7 +148,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_photo(
         photo=START_IMG,
         caption=caption,
-        has_spoiler=True,              # 👈 yahi 
+        has_spoiler=True,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode=ParseMode.MARKDOWN
     )
@@ -180,10 +181,12 @@ async def start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"👮 **Admin:** Group Management"
         )
         kb = [
-            [InlineKeyboardButton("🏦 Bank", callback_data="help_bank"), InlineKeyboardButton("📊 Market", callback_data="help_market")],
-            [InlineKeyboardButton("🎮 Games", callback_data="help_games"), InlineKeyboardButton("🛒 Shop", callback_data="help_shop")],
-            # 🔥 ADMIN BUTTON ADDED HERE
-            [InlineKeyboardButton("👮 Admin", callback_data="help_admin"), InlineKeyboardButton("🔮 Extra", callback_data="help_next")],
+            [InlineKeyboardButton("🏦 Bank", callback_data="help_bank"), 
+             InlineKeyboardButton("📊 Market", callback_data="help_market")],
+            [InlineKeyboardButton("🎮 Games", callback_data="help_games"), 
+             InlineKeyboardButton("🛒 Shop", callback_data="help_shop")],
+            [InlineKeyboardButton("👮 Admin", callback_data="help_admin"), 
+             InlineKeyboardButton("🔮 Extra", callback_data="help_next")],
             [InlineKeyboardButton("🔙 Back Home", callback_data="back_home")]
         ]
         await q.edit_message_caption(caption=caption, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
@@ -270,7 +273,6 @@ async def start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 4. BACK HOME
     elif data == "back_home":
-        owner_link = f"[{OWNER_NAME}](tg://user?id={OWNER_ID})"
         try:
             uptime = get_readable_time()
             cpu = psutil.cpu_percent()
@@ -283,25 +285,40 @@ async def start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ┆◍ ʜєʏ, {user.first_name} 🥀
 ┆◍ ɪ ᴧϻ {context.bot.first_name}
 └────────────────────•
-```
-ɪ ᴀᴍ ᴛʜᴇ ғᴀsᴛᴇsᴛ ᴀɴᴅ ᴘᴏᴡᴇʀғᴜʟ ᴇᴄᴏɴᴏᴍʏ & ᴀɪ ʙᴏᴛ ᴡɪᴛʜ sᴏᴍᴇ ᴀᴡᴇsᴏᴍᴇ ғᴇᴀᴛᴜʀᴇs.
-```
 
-```
-➥ᴜᴘᴛɪᴍᴇ: `{uptime}`
-➥sᴇʀᴠᴇʀ sᴛᴏʀᴀɢᴇ: `{disk}%`
-➥ᴄᴘᴜ ʟᴏᴀᴅ: `{cpu}%`
-➥ʀᴀᴍ ᴄᴏɴsᴜᴍᴘᴛɪᴏɴ: `{ram}%`
+ɪ ᴀᴍ ᴛʜᴇ ғᴀsᴛᴇsᴛ ᴀɴᴅ ᴘᴏᴡᴇʀғᴜʟ ᴇᴄᴏɴᴏᴍʏ & ᴀɪ ʙᴏᴛ ᴡɪᴛʜ sᴏᴍᴇ ᴀᴡᴇsᴏᴍᴇ ғᴇᴀᴛᴜʀᴇs.
+
+
+
+╭─ ⚙️ SYSTEM STATUS
+│ ➥ UPTIME: {uptime}
+│ ➥ SERVER STORAGE: {disk:.1f}%
+│ ➥ CPU LOAD: {cpu:.1f}%
+│ ➥ RAM CONSUMPTION: {ram:.1f}%
+╰───────────────
+
 •──────────────────────•
-```
-✦ᴘᴏᴡєʀєᴅ ʙʏ » {owner_link}
-```
+
+✦ ᴘᴏᴡєʀєᴅ ʙʏ © Ᏼø፝֟፝֟ssㅤᴊɪɪ ┋ꕥ 𝁘ໍ𝀛
 """
 
+        # SAME BUTTON LAYOUT FOR BACK_HOME
         keyboard = [
-            [InlineKeyboardButton("💬 Chat AI", callback_data="start_chat_ai"), InlineKeyboardButton("📊 Ranking", callback_data="help_market")],
-            [InlineKeyboardButton("🎮 Games & Casino", callback_data="help_games"), InlineKeyboardButton("🛒 VIP Shop", callback_data="help_shop")],
-            [InlineKeyboardButton("🚑 Support", url=SUPPORT_LINK), InlineKeyboardButton("📚 Commands", callback_data="help_main")],
-            [InlineKeyboardButton("➕ Add Me To Your Group ➕", url=f"https://t.me/{context.bot.username}?startgroup=true")]
+            [
+                InlineKeyboardButton("     Add Group     ", 
+                                     url=f"https://t.me/{context.bot.username}?startgroup=true")
+            ],
+            [
+                InlineKeyboardButton("      Help Commands            ", 
+                                     callback_data="help_main")
+            ],
+            [
+                InlineKeyboardButton("[Update]", url=UPDATE_LINK),
+                InlineKeyboardButton("[Support]", url=SUPPORT_LINK)
+            ],
+            [
+                InlineKeyboardButton("     Owner          ", 
+                                     url=f"tg://user?id={OWNER_ID}")
+            ]
         ]
         await q.edit_message_caption(caption=caption, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
