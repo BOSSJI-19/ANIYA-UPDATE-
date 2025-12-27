@@ -14,7 +14,7 @@ API_HASH = getenv("API_HASH", "")
 # 🔥 Ye 3 nayi lines add karo:
 OWNER_USERNAME = "@Prince_Username"  # Apna Username yahan daalo (bina @ ke bhi chalega string hai)
 GROUP_NAME = "Prince Support"        # Apne Group ka naam
-GROUP_LINK = "https://t.me/Prince_Support" # Apne Group ka Link
+GROUP_LINK = "https://t.me/+KNd7I2tIFuVlYmY9" # Apne Group ka Link
 
 # config.py
 INSTAGRAM_LINK = "https://www.instagram.com/ll_your_boss_ll" # Yahan apna link daal dena
