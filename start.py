@@ -40,7 +40,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         txt = "<blockquote><b>Start in DM me</b></blockquote>"
         
         # Inline Button for DM
-        kb = [[InlineKeyboardButton("Start in DM ↗️", url=f"https://t.me/{bot_username}?start=true")]]
+        kb = [[InlineKeyboardButton("ꜱᴛᴀʀᴛ ɪɴ ᴅᴍ 🍷", url=f"https://t.me/{bot_username}?start=true")]]
         
         await update.message.reply_text(
             txt, 
@@ -139,7 +139,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🍁 ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ 🍁", url=f"https://t.me/{bot_username}?startgroup=true")],
         [InlineKeyboardButton("🍭ᴄᴏᴍᴍᴀɴᴅꜱ", callback_data="help_main")],
         [InlineKeyboardButton("ᴜᴘᴅᴀᴛᴇ 💕", url=UPDATE_CHANNEL), InlineKeyboardButton("🚑 Support", url=GROUP_LINK)],
-        [InlineKeyboardButton(f"ꜰᴏʟʟᴏᴡ ᴍᴇ 👀{bot_name}", url=INSTAGRAM_LINK)],
+        [InlineKeyboardButton(f"ꜰᴏʟʟᴏᴡ ᴍᴇ 👀", url=INSTAGRAM_LINK)],
         [InlineKeyboardButton("ᴏᴡɴᴇʀ 🍫", url=f"tg://user?id={OWNER_ID}")]
     ]
 
