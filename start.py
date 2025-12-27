@@ -94,23 +94,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ┆◍ ʜєʏ, {first_name} 🥀
 ┆◍ ɪ ᴧϻ {bot_name}
 └────────────────────•
-```
+<pre>
 ɪ ᴀᴍ ᴛʜᴇ ᴍᴏsᴛ ᴀᴅᴠᴀɴᴄᴇᴅ ᴍᴜʟᴛɪ-ᴘᴜʀᴘᴏsᴇ ʙᴏᴛ. 
 ɪ ᴏғғᴇʀ ʜɪɢʜ-ǫᴜᴀʟɪᴛʏ ᴍᴜsɪᴄ, ɢʟᴏʙᴀʟ ᴇᴄᴏɴᴏᴍʏ
 ᴀɪ ᴄʜᴀᴛ & ɢʀᴏᴜᴘ sᴇᴄᴜʀɪᴛʏ.
-```
-```
+<pre>
+<pre>
 ╭─ ⚙️ SYSTEM STATUS
 │ ➥ UPTIME: {uptime}
 │ ➥ SERVER STORAGE: {disk:.1f}%
 │ ➥ CPU LOAD: {cpu:.1f}%
 │ ➥ RAM CONSUMPTION: {ram:.1f}%
 ╰───────────────
-```
+<pre>
 •──────────────────────•
-```
+<pre>
 ✦ ᴘᴏᴡєʀєᴅ ʙʏ © BOSS JI
-```
+<pre>
 """
 
     # Register & Log
@@ -136,11 +136,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     # Buttons
     keyboard = [
-        [InlineKeyboardButton("➕ Add Me To Your Group ➕", url=f"https://t.me/{bot_username}?startgroup=true")],
-        [InlineKeyboardButton("📚 Help Commands", callback_data="help_main")],
-        [InlineKeyboardButton("📢 Update", url=UPDATE_CHANNEL), InlineKeyboardButton("🚑 Support", url=GROUP_LINK)],
-        [InlineKeyboardButton(f"📸 Follow on {bot_name}", url=INSTAGRAM_LINK)],
-        [InlineKeyboardButton("👑 Owner", url=f"tg://user?id={OWNER_ID}")]
+        [InlineKeyboardButton("🍁 ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ 🍁", url=f"https://t.me/{bot_username}?startgroup=true")],
+        [InlineKeyboardButton("🍭ᴄᴏᴍᴍᴀɴᴅꜱ", callback_data="help_main")],
+        [InlineKeyboardButton("ᴜᴘᴅᴀᴛᴇ 💕", url=UPDATE_CHANNEL), InlineKeyboardButton("🚑 Support", url=GROUP_LINK)],
+        [InlineKeyboardButton(f"ꜰᴏʟʟᴏᴡ ᴍᴇ 👀{bot_name}", url=INSTAGRAM_LINK)],
+        [InlineKeyboardButton("ᴏᴡɴᴇʀ 🍫", url=f"tg://user?id={OWNER_ID}")]
     ]
 
     try:
@@ -206,11 +206,11 @@ async def start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ┆◍ ʜєʏ, {first_name} 🥀
 ┆◍ ɪ ᴧϻ {context.bot.first_name}
 └────────────────────•
-```
+<pre>
 ɪ ᴀᴍ ᴛʜᴇ ᴍᴏsᴛ ᴀᴅᴠᴀɴᴄᴇᴅ ᴍᴜʟᴛɪ-ᴘᴜʀᴘᴏsᴇ ʙᴏᴛ. 
 ɪ ᴏғғᴇʀ ʜɪɢʜ-ǫᴜᴀʟɪᴛʏ ᴍᴜsɪᴄ, ɢʟᴏʙᴀʟ ᴇᴄᴏɴᴏᴍʏ
 ᴀɪ ᴄʜᴀᴛ & ɢʀᴏᴜᴘ sᴇᴄᴜʀɪᴛʏ.
-```
+<pre>
 <pre>
 ╭─ ⚙️ SYSTEM STATUS
 │ ➥ UPTIME: {uptime}
@@ -220,9 +220,9 @@ async def start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ╰───────────────
 </pre>
 •──────────────────────•
-```
+<pre>
 ✦ᴘᴏᴡєʀєᴅ ʙʏ » BOSS JI 
-```
+<pre>
 """
         keyboard = [
             [InlineKeyboardButton("➕ Add Me To Your Group ➕", url=f"https://t.me/{bot_username}?startgroup=true")],
