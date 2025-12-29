@@ -410,6 +410,7 @@ def main():
     app.add_handler(CommandHandler("pay", pay.pay_user))
     app.add_handler(CommandHandler("rob", pay.rob_user))
     app.add_handler(CommandHandler("kill", pay.kill_user))
+    app.add_handler(CommandHandler("revive", pay.revive_command))
     app.add_handler(CommandHandler("protect", pay.protect_user))
     app.add_handler(CommandHandler("alive", pay.check_status))
     app.add_handler(CommandHandler("time", livetime.start_live_time))
