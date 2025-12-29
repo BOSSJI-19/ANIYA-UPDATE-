@@ -14,16 +14,17 @@ from database import (
     check_registered, register_user, update_group_activity, 
     update_username, update_chat_stats,
     is_user_muted, is_user_banned,
-    get_logger_group
+    get_logger_group,
+    set_group_setting, get_group_settings  # ✅ ADDED NEW DB FUNCTIONS
 )
 from ai_chat import get_yuki_response, get_mimi_sticker
 from tts import generate_voice 
 
 # ✅ Music Assistant Import
 from tools.stream import start_music_worker
-import tools.stream # ✅ Button Logic ke liye ye zaroori hai
+import tools.stream 
 
-# MODULES (Removed 'grouptools')
+# MODULES 
 import admin, start, group, leaderboard, pay, bet, wordseek, chatstat, logger, events, info, tictactoe, couple
 import livetime  
 import dmspam 
@@ -46,7 +47,7 @@ SHOP_ITEMS = {
     "rich":  {"name": "💸 Rich", "price": 100000}
 }
 
-# --- 🔌 AUTO LOADER FUNCTION ---
+# --- 🔌 AUTO LOADER FUNCTION (DEBUG MODE) ---
 def load_plugins(application: Application):
     plugin_dir = "tools"
     if not os.path.exists(plugin_dir):
@@ -65,7 +66,8 @@ def load_plugins(application: Application):
                 module.register_handlers(application)
                 print(f"  ✅ Loaded: {module_name}")
         except Exception as e:
-            print(f"  ❌ Failed to load {module_name}: {e}")
+            print(f"  ❌ FAILED to load {module_name}!")
+            print(f"     Error: {e}")
 
 # --- STARTUP MESSAGE ---
 async def on_startup(application: Application):
@@ -80,7 +82,56 @@ async def on_startup(application: Application):
             me = await application.bot.get_me()
             txt = f"<blockquote><b>{BOT_NAME}ʙᴏᴛ active 🍭</b></blockquote>\n@{me.username}"
             await application.bot.send_message(chat_id=logger_id, text=txt, parse_mode=ParseMode.HTML)
-        except: pass
+        except Exception as e: 
+            print(f"⚠️ Logger Error: {e}")
+
+# --- ⚙️ NEW COMMANDS: GCHAT & GSTICKER (STYLED) ---
+
+async def toggle_gchat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+    
+    # Admin Check
+    if chat.type in ["group", "supergroup"]:
+        member = await chat.get_member(user.id)
+        if member.status not in ["administrator", "creator"]:
+            return await update.message.reply_text("❌ ᴏɴʟʏ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ᴄʜᴀɴɢᴇ ᴛʜɪꜱ ꜱᴇᴛᴛɪɴɢ!")
+
+    if not context.args:
+        return await update.message.reply_text("⚠️ ᴜꜱᴀɢᴇ: `/ɢᴄʜᴀᴛ ᴏɴ` ᴏʀ `/ɢᴄʜᴀᴛ ᴏꜰꜰ`")
+
+    state = context.args[0].lower()
+    if state == "on":
+        set_group_setting(chat.id, "chat_mode", True)
+        await update.message.reply_text(f"✅ **ᴄʜᴀᴛ ᴍᴏᴅᴇ ᴇɴᴀʙʟᴇᴅ!**\nɪ ᴡɪʟʟ ᴛᴀʟᴋ ɪɴ ᴛʜɪꜱ ɢʀᴏᴜᴘ ɴᴏᴡ.")
+    elif state == "off":
+        set_group_setting(chat.id, "chat_mode", False)
+        await update.message.reply_text(f"🔇 **ᴄʜᴀᴛ ᴍᴏᴅᴇ ᴅɪꜱᴀʙʟᴇᴅ!**\nɪ ᴡɪʟʟ ʙᴇ ǫᴜɪᴇᴛ ɴᴏᴡ.")
+    else:
+        await update.message.reply_text("⚠️ ᴜꜱᴀɢᴇ: `/ɢᴄʜᴀᴛ ᴏɴ` ᴏʀ `/ɢᴄʜᴀᴛ ᴏꜰꜰ`")
+
+async def toggle_gsticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+
+    # Admin Check
+    if chat.type in ["group", "supergroup"]:
+        member = await chat.get_member(user.id)
+        if member.status not in ["administrator", "creator"]:
+            return await update.message.reply_text("❌ ᴏɴʟʏ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ᴄʜᴀɴɢᴇ ᴛʜɪꜱ ꜱᴇᴛᴛɪɴɢ!")
+
+    if not context.args:
+        return await update.message.reply_text("⚠️ ᴜꜱᴀɢᴇ: `/ɢꜱᴛɪᴄᴋᴇʀ ᴏɴ` ᴏʀ `/ɢꜱᴛɪᴄᴋᴇʀ ᴏꜰꜰ`")
+
+    state = context.args[0].lower()
+    if state == "on":
+        set_group_setting(chat.id, "sticker_mode", True)
+        await update.message.reply_text(f"✅ **ꜱᴛɪᴄᴋᴇʀ ᴍᴏᴅᴇ ᴇɴᴀʙʟᴇᴅ!**\nɪ ᴡɪʟʟ ʀᴇᴘʟʏ ᴡɪᴛʜ ꜱᴛɪᴄᴋᴇʀꜱ.")
+    elif state == "off":
+        set_group_setting(chat.id, "sticker_mode", False)
+        await update.message.reply_text(f"🚫 **ꜱᴛɪᴄᴋᴇʀ ᴍᴏᴅᴇ ᴅɪꜱᴀʙʟᴇᴅ!**\nɴᴏ ᴍᴏʀᴇ ꜱᴛɪᴄᴋᴇʀꜱ ɪɴ ʀᴇᴘʟʏ.")
+    else:
+        await update.message.reply_text("⚠️ ᴜꜱᴀɢᴇ: `/ɢꜱᴛɪᴄᴋᴇʀ ᴏɴ` ᴏʀ `/ɢꜱᴛɪᴄᴋᴇʀ ᴏꜰꜰ`")
 
 # --- SHOP MENU ---
 async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -109,14 +160,14 @@ async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     codes_col.update_one({"code": code}, {"$push": {"redeemed_by": user.id}})
     await update.message.reply_text(f"🎉 Redeemed ₹{data['amount']}!")
 
-# --- CALLBACK HANDLER (UPDATED WITH MUSIC CONTROLS) ---
+# --- CALLBACK HANDLER ---
 async def callback_handler(update, context):
     q = update.callback_query
     data = q.data
     uid = q.from_user.id
     chat_id = update.effective_chat.id
     
-    # 🔥 1. MUSIC PLAYER CONTROLS (Pause/Skip/Stop)
+    # 🔥 1. MUSIC PLAYER CONTROLS
     if data.startswith("music_"):
         await q.answer()
         action = data.split("_")[1]
@@ -136,7 +187,7 @@ async def callback_handler(update, context):
             await q.message.reply_text("⏹ Stream Stopped", quote=True)
         return
 
-    # 🔥 2. FORCE CLOSE BUTTON (Error Msg Delete)
+    # 🔥 2. FORCE CLOSE
     if data == "force_close":
         try: await q.message.delete()
         except: await q.answer("❌ Delete nahi kar sakta!", show_alert=True)
@@ -146,6 +197,10 @@ async def callback_handler(update, context):
     if data in ["close_log", "close_ping"]:
         try: await q.message.delete()
         except: pass
+        return
+
+    if data == "help_main" or data.startswith("help_"):
+        await start.start_callback(update, context)
         return
 
     if data == "back_home":
@@ -226,7 +281,7 @@ async def callback_handler(update, context):
         await livetime.close_time(update, context)
         return
 
-# --- MESSAGE HANDLER ---
+# --- MESSAGE HANDLER (UPDATED LOGIC) ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message: return
     user = update.effective_user
@@ -265,8 +320,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await wordseek.handle_word_guess(update, context)
     await wordgrid.handle_word_guess(update, context)
 
+    # 🛑 SETTINGS CHECK (DATABASE SE)
+    settings = get_group_settings(chat.id)
+    chat_enabled = settings["chat_mode"]
+    sticker_enabled = settings["sticker_mode"]
+
     # 5. STICKER REPLY
     if update.message.sticker:
+        # Agar Sticker Mode OFF hai, toh ignore karo
+        if not sticker_enabled:
+            return
+
         if chat.type == "private" or (update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id) or random.random() < 0.2:
             sticker_id = await get_mimi_sticker(context.bot)
             if sticker_id: await update.message.reply_sticker(sticker_id)
@@ -280,6 +344,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat.type == "private": should_reply = True
     elif any(trigger in text.lower() for trigger in ["aniya", context.bot.username.lower()]): should_reply = True
     elif update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id: should_reply = True
+
+    # 🛑 CHAT MODE CHECK
+    if chat.type != "private" and not chat_enabled:
+        # Agar GChat OFF hai, toh sirf Reply karne par hi bolega
+        if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
+            should_reply = True 
+        else:
+            should_reply = False # Random triggers (aniya) ignore honge
 
     if should_reply:
         voice_triggers = ["voice", "note", "moh", "audio", "gn", "gm", "rec","kaho"]
@@ -345,6 +417,10 @@ def main():
     app.add_handler(CommandHandler("time", livetime.start_live_time))
     app.add_handler(MessageHandler(filters.Regex(r'^[\./]time'), livetime.start_live_time))
 
+    # ✅ REGISTER NEW COMMANDS
+    app.add_handler(CommandHandler(["gchat", "Gchat"], toggle_gchat))
+    app.add_handler(CommandHandler(["gsticker", "Gsticker"], toggle_gsticker))
+
     app.add_handler(CallbackQueryHandler(callback_handler))
     
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, events.welcome_user))
@@ -355,8 +431,10 @@ def main():
     
     app.add_handler(MessageHandler(filters.Regex(r'(?i)^[\./]crank'), chatstat.show_leaderboard))
     
+    # 🔥 Plugins LOAD (Music vagera)
     load_plugins(app)
 
+    # Note: 'handle_message' catches ALL text, so it must be last
     app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_message))
     
     print(f"🚀 {BOT_NAME} STARTED SUCCESSFULLY!")
@@ -364,4 +442,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-                                        
+    
