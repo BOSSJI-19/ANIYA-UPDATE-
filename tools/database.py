@@ -32,8 +32,11 @@ try:
     users_db = db.served_users
     chats_db = db.served_chats
 
-    # Collections (Settings) 🔥 NEW
+    # Collections (Tools & Settings)
     settings_db = db.settings
+    filters_db = db.filters
+    auth_db = db.auth_users  # ✅ NEW: Auth
+    bank_db = db.bank_users  # ✅ NEW: Bank
     
     print("✅ Async Database Connected Successfully!")
 except Exception as e:
@@ -140,11 +143,73 @@ async def add_served_chat(chat_id: int):
         await chats_db.insert_one({"chat_id": chat_id})
 
 # ==========================================
-#        ⚙️ SETTINGS FUNCTIONS (NEW)
+#        🛡️ AUTH SYSTEM FUNCTIONS
 # ==========================================
 
+async def save_auth_user(chat_id: int, user_id: int, user_name: str, admin_name: str):
+    doc = {
+        "chat_id": chat_id,
+        "user_id": user_id,
+        "user_name": user_name,
+        "admin_name": admin_name
+    }
+    await auth_db.update_one(
+        {"chat_id": chat_id, "user_id": user_id},
+        {"$set": doc},
+        upsert=True
+    )
+
+async def delete_auth_user(chat_id: int, user_id: int):
+    await auth_db.delete_one({"chat_id": chat_id, "user_id": user_id})
+
+async def get_auth_users(chat_id: int):
+    users = []
+    async for doc in auth_db.find({"chat_id": chat_id}):
+        users.append(doc)
+    return users
+
+async def is_user_authorized(chat_id: int, user_id: int):
+    user = await auth_db.find_one({"chat_id": chat_id, "user_id": user_id})
+    return True if user else False
+
+# ==========================================
+#        💰 BANK/ECONOMY FUNCTIONS
+# ==========================================
+
+async def get_balance(user_id: int):
+    user = await bank_db.find_one({"user_id": user_id})
+    if not user:
+        return 0
+    # 🔥 FIXED: Prevents KeyError
+    return user.get("balance", 0)
+
+async def set_balance(user_id: int, amount: int):
+    await bank_db.update_one(
+        {"user_id": user_id},
+        {"$set": {"balance": amount}},
+        upsert=True
+    )
+
+async def add_money(user_id: int, amount: int):
+    current = await get_balance(user_id)
+    new_bal = current + amount
+    await set_balance(user_id, new_bal)
+    return new_bal
+
+async def deduct_money(user_id: int, amount: int):
+    current = await get_balance(user_id)
+    if current < amount:
+        return False
+    new_bal = current - amount
+    await set_balance(user_id, new_bal)
+    return True
+
+# ==========================================
+#        ⚙️ SETTINGS FUNCTIONS
+# ==========================================
+
+# 1. Admin Command Mode (Legacy)
 async def set_admincmd_mode(chat_id: int, state: bool):
-    """Admin List command ko ON/OFF set karta hai"""
     await settings_db.update_one(
         {"chat_id": chat_id},
         {"$set": {"admin_list_enabled": state}},
@@ -152,18 +217,36 @@ async def set_admincmd_mode(chat_id: int, state: bool):
     )
 
 async def is_admincmd_enabled(chat_id: int):
-    """Check karta hai ki Admin List command ON hai ya OFF (Default: ON)"""
     data = await settings_db.find_one({"chat_id": chat_id})
     if not data:
-        return True # Default ON rahega
+        return True
     return data.get("admin_list_enabled", True)
 
-# --- FILTER SYSTEM (tools/database.py ke end mein add karo) ---
+# 2. Global Music Mode (New with Reason)
+async def set_global_music(state: bool, reason: str = None):
+    data = {"is_enabled": state}
+    if reason:
+        data["reason"] = reason
+    else:
+        data["reason"] = None
+        
+    await settings_db.update_one(
+        {"type": "global_music"},
+        {"$set": data},
+        upsert=True
+    )
 
-filters_db = db.filters
+async def get_music_status():
+    data = await settings_db.find_one({"type": "global_music"})
+    if not data:
+        return True, None
+    return data.get("is_enabled", True), data.get("reason", None)
+
+# ==========================================
+#        📝 FILTER SYSTEM FUNCTIONS
+# ==========================================
 
 async def save_filter(chat_id: int, keyword: str, file_data: dict):
-    """Filter save karta hai (Keyword -> Content)"""
     await filters_db.update_one(
         {"chat_id": chat_id, "keyword": keyword.lower()},
         {"$set": {"file_data": file_data}},
@@ -171,20 +254,16 @@ async def save_filter(chat_id: int, keyword: str, file_data: dict):
     )
 
 async def get_filter(chat_id: int, keyword: str):
-    """Keyword match hone par content deta hai"""
     data = await filters_db.find_one({"chat_id": chat_id, "keyword": keyword.lower()})
     return data["file_data"] if data else None
 
 async def delete_filter(chat_id: int, keyword: str):
-    """Filter delete karta hai"""
     result = await filters_db.delete_one({"chat_id": chat_id, "keyword": keyword.lower()})
     return result.deleted_count > 0
 
 async def get_all_filters(chat_id: int):
-    """Group ke saare filters ki list deta hai"""
     keywords = []
     async for doc in filters_db.find({"chat_id": chat_id}):
         keywords.append(doc["keyword"])
     return keywords
-    
     
