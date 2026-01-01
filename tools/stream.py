@@ -1,4 +1,3 @@
-
 import asyncio
 import os
 import html 
@@ -116,7 +115,7 @@ async def start_music_worker():
     except Exception as e:
         print(f"❌ Assistant Error: {e}")
 
-# --- 1. PLAY LOGIC (SMART FIX: Direct Play First) ---
+# --- 1. PLAY LOGIC (NO-CUTTING FIX) ---
 async def play_stream(chat_id, file_path, title, duration, user, link, thumbnail):
     if not worker: return None, "Music System Error"
     
@@ -126,45 +125,62 @@ async def play_stream(chat_id, file_path, title, duration, user, link, thumbnail
 
     try:
         # ✅ STEP 1: Pehle Database mein Queue update karo
+        # Ye zaroori hai taaki list maintain rahe
         position = await put_queue(chat_id, file_path, safe_title, duration, safe_user, link, thumbnail)
         
-        # ✅ STEP 2: Logic Check
-        # Agar Position 0 hai (List khali thi), toh matlab Bajana hai.
-        # Chahe Assistant andar ho ya bahar, bajna chahiye.
-        if position == 0:
-            print(f"⚡ [PLAY] Force Playing Position #0 in {chat_id}")
-            
-            # 🔥 TRY 1: Direct Play (Agar Assistant pehle se andar hai)
-            # Ye bina 'Join' kiye gaana baja dega, to 'Invite Hash Error' nahi aayega.
+        # ✅ STEP 2: CHECK - KYA BOT ABHI VC MEIN HAI?
+        is_active = False
+        try:
+            for call in worker.active_calls:
+                if call.chat_id == chat_id:
+                    is_active = True
+                    break
+        except: pass
+
+        # === LOGIC TREE ===
+
+        # CASE A: Bot Active Hai + UI Message Maujood Hai (Matlab Gaana Baj Raha Hai)
+        if is_active and chat_id in LAST_MSG_ID:
+            # Current gaana chalne do. Naye wale ko QUEUE mein rakho.
+            # Position return karo taaki user ko "Added to Queue" dikhe.
+            return False, position
+
+        # CASE B: Bot Active Hai PAR Koi Message Nahi Hai (Idle Mode)
+        elif is_active and chat_id not in LAST_MSG_ID:
+            print(f"⚡ [IDLE PLAY] Bot is active but idle. Playing {safe_title}")
             try:
                 await worker.change_stream(int(chat_id), stream)
-                await add_active_chat(chat_id)
                 
                 # UI Update
                 song_data = {"title": safe_title, "duration": duration, "by": safe_user, "link": link, "thumbnail": thumbnail}
                 await send_now_playing(chat_id, song_data)
                 return True, 0
+            except:
+                # Agar change fail ho jaye to Rejoin
+                try: await worker.leave_group_call(int(chat_id))
+                except: pass
+                await asyncio.sleep(0.5)
+                await worker.join_group_call(int(chat_id), stream)
+                
+                song_data = {"title": safe_title, "duration": duration, "by": safe_user, "link": link, "thumbnail": thumbnail}
+                await send_now_playing(chat_id, song_data)
+                return True, 0
 
-            except Exception as e:
-                # 🔥 TRY 2: Agar Change fail hua (Matlab Assistant bahar hai), tab Join karo.
-                print(f"⚠️ Direct Play Failed ({e}), Joining Now...")
-                try:
-                    try: await worker.leave_group_call(int(chat_id))
-                    except: pass
-                    await asyncio.sleep(0.5)
-                    await worker.join_group_call(int(chat_id), stream)
-                    await add_active_chat(chat_id)
-                    
-                    song_data = {"title": safe_title, "duration": duration, "by": safe_user, "link": link, "thumbnail": thumbnail}
-                    await send_now_playing(chat_id, song_data)
-                    return True, 0
-                except Exception as join_e:
-                    # Agar Join bhi fail ho jaye
-                    return None, f"⚠️ Connection Error: {join_e}"
-
-        # ✅ STEP 3: Agar Position > 0 hai (Queue mein aur gaane hain)
+        # CASE C: Bot Active Hi Nahi Hai (First Song)
         else:
-            return False, position
+            # Join and Play
+            try: await worker.leave_group_call(int(chat_id))
+            except: pass
+            
+            await asyncio.sleep(0.5)
+            await worker.join_group_call(int(chat_id), stream)
+            await add_active_chat(chat_id)
+            
+            # UI Update
+            song_data = {"title": safe_title, "duration": duration, "by": safe_user, "link": link, "thumbnail": thumbnail}
+            await send_now_playing(chat_id, song_data)
+            
+            return True, 0
 
     except Exception as e:
         return None, str(e)
