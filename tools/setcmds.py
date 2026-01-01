@@ -60,7 +60,7 @@ RAW_COMMANDS = [
     
     # Broadcast
     ("broadcast", "broadcast dm"),
-    ("broadcastgc", "broadcast groups")
+    ("broadcastgc", "broadcast groups"),
     ("font", "txt to font "),
 ]
 
