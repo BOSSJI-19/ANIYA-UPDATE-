@@ -7,8 +7,7 @@ from telegram.constants import ParseMode, ChatAction
 from tools.controller import process_stream
 from tools.stream import play_stream
 from tools.database import get_cached_song, save_cached_song
-from tools.youtube import YouTubeAPI # ✅ YouTube Import kiya
-from tools.utils import run_sync # ✅ Anti-Freeze ke liye
+from tools.youtube import YouTubeAPI 
 
 # Initialize YouTube
 YouTube = YouTubeAPI()
@@ -36,7 +35,7 @@ async def fplay_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cached_data = await get_cached_song(query)
 
     if cached_data:
-        # ✅ Agar Cache mil gaya (Search Skip Karo)
+        # ✅ Agar Cache mil gaya
         title = cached_data["title"]
         duration = cached_data["duration"]
         thumbnail = cached_data["thumbnail"]
@@ -44,22 +43,19 @@ async def fplay_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await status_msg.edit_text(f"<blockquote>⬇️ <b>Found in Cache! Downloading...</b>\n{title}</blockquote>", parse_mode=ParseMode.HTML)
         
-        # 🔥 MAIN FIX: Cache milne ke baad bhi DOWNLOAD karna padega
         try:
-            # Background me download karo taaki bot freeze na ho
-            file_path, direct_link = await run_sync(
-                YouTube.download,
+            # 🔥 FIX: run_sync HATA DIYA (Direct await karo)
+            file_path, direct_link = await YouTube.download(
                 link,
                 mystic=None,
                 title=title,
                 format_id="bestaudio"
             )
             
-            # Ab Play karo (File Path bhej rahe hain, Link nahi)
+            # Ab Play karo
             success, position = await play_stream(chat.id, file_path, title, duration, user.first_name, link, thumbnail)
             
             if success:
-                # Buttons (Music.py style)
                 kb = [[InlineKeyboardButton("🗑 Close", callback_data="force_close")]]
                 await context.bot.send_photo(
                     chat.id, 
@@ -75,29 +71,26 @@ async def fplay_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         except Exception as e:
             print(f"❌ Cache Play Error: {e}")
-            # Agar Cache wala fail ho jaye, to niche Normal Play pe girne do...
+            # Agar fail hua to niche normal process me jayega
 
-    # --- 🐢 STEP 2: AGAR CACHE NAHI HAI (NORMAL PLAY + SAVE) ---
+    # --- 🐢 STEP 2: AGAR CACHE NAHI HAI ---
     await status_msg.edit_text(f"<blockquote>🔍 <b>Searching Web...</b>\n<code>{query}</code></blockquote>", parse_mode=ParseMode.HTML)
     
-    # Controller call karo (Search + Download)
+    # Controller call karo
     error, data = await process_stream(chat.id, user.first_name, query)
     
     if error:
         return await status_msg.edit_text(error)
 
-    # --- 🔥 STEP 3: SAVE TO DATABASE FOR NEXT TIME ---
-    # Hum result ko save kar lenge taaki agli baar /fplay kaam kare
+    # --- 🔥 STEP 3: SAVE TO DATABASE ---
     cache_entry = {
         "title": data["title"],
         "duration": data["duration"],
         "thumbnail": data["thumbnail"],
-        "link": data["link"] # YouTube URL
+        "link": data["link"]
     }
-    # Future ke liye save karo
     await save_cached_song(query, cache_entry)
 
-    # Send Playing Message
     kb = [[InlineKeyboardButton("🗑 Close", callback_data="force_close")]]
     await context.bot.send_photo(
         chat.id, 
