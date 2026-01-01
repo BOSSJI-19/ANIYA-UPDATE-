@@ -15,7 +15,7 @@ from tools.database import is_active_chat, add_active_chat, remove_active_chat
 
 # --- GLOBAL DICTIONARIES ---
 LAST_MSG_ID = {}   
-QUEUE_MSG_ID = {}  # ✅ Added back to fix Import Error
+QUEUE_MSG_ID = {}
 
 # --- ⚠️ SAFE CLIENT SETUP ---
 print("🟡 [STREAM] Loading Music Module...")
@@ -45,19 +45,14 @@ main_bot = Bot(token=BOT_TOKEN)
 def get_progress_bar(duration):
     return "◉————————————"
 
-# --- 🔥 HELPER: SAFE UI SENDER (Anti-Crash) ---
+# --- 🔥 HELPER: SAFE UI SENDER ---
 async def send_now_playing(chat_id, song_data):
-    """
-    Ye function fail hone par bhi music nahi rokega.
-    HTML Errors ko handle karega.
-    """
     try:
-        # Purana message delete karo
         if chat_id in LAST_MSG_ID:
             try: await main_bot.delete_message(chat_id, LAST_MSG_ID[chat_id])
             except: pass
         
-        # 🛡️ HTML ESCAPE (Parsing Error Fix)
+        # HTML Escape to prevent crashes
         title = html.escape(str(song_data["title"]))
         user = html.escape(str(song_data["by"]))
         duration = str(song_data["duration"])
@@ -105,7 +100,6 @@ async def send_now_playing(chat_id, song_data):
         )
         LAST_MSG_ID[chat_id] = msg.message_id
         return True
-
     except Exception as e:
         print(f"⚠️ [UI ERROR] Message nahi gaya, par music chalega. Error: {e}")
         return False
@@ -114,7 +108,6 @@ async def send_now_playing(chat_id, song_data):
 async def start_music_worker():
     print("🔵 Starting Music Assistant...")
     if not worker: return
-
     try:
         if not worker_app.is_connected:
             await worker_app.start()
@@ -124,14 +117,12 @@ async def start_music_worker():
     except Exception as e:
         print(f"❌ Assistant Error: {e}")
 
-# --- 1. PLAY LOGIC (Robust Join) ---
+# --- 1. PLAY LOGIC (WITH POSITION #0 FIX) ---
 async def play_stream(chat_id, file_path, title, duration, user, link, thumbnail):
     if not worker: return None, "Music System Error"
     
-    # Raw variables
     safe_title = title
     safe_user = user
-
     stream = AudioPiped(file_path, audio_parameters=HighQualityAudio())
 
     try:
@@ -145,21 +136,42 @@ async def play_stream(chat_id, file_path, title, duration, user, link, thumbnail
         except: pass
 
         if is_connected:
+            # ✅ STEP 1: Pehle queue mein daalo
             position = await put_queue(chat_id, file_path, safe_title, duration, safe_user, link, thumbnail)
+            
+            # 🔥 STEP 2: CRITICAL FIX - Agar ye pehla gaana hai (Position 0), toh Wait mat karo, PLAY KARO!
+            if position == 0:
+                print(f"⚡ [IDLE FIX] Bot was idle in {chat_id}, Force Playing Position #0")
+                try:
+                    await worker.change_stream(int(chat_id), stream)
+                    
+                    # UI Bhejo
+                    song_data = {"title": safe_title, "duration": duration, "by": safe_user, "link": link, "thumbnail": thumbnail}
+                    await send_now_playing(chat_id, song_data)
+                    
+                    return True, 0 # Return True taaki user ko "Playing" dikhe
+                except Exception as e:
+                    print(f"⚠️ Idle Change Failed: {e}, Trying Rejoin...")
+                    # Agar change fail hua to Rejoin karo
+                    try: await worker.leave_group_call(int(chat_id))
+                    except: pass
+                    await asyncio.sleep(0.5)
+                    await worker.join_group_call(int(chat_id), stream)
+                    
+                    song_data = {"title": safe_title, "duration": duration, "by": safe_user, "link": link, "thumbnail": thumbnail}
+                    await send_now_playing(chat_id, song_data)
+                    return True, 0
+
             return False, position
         else:
-            # JOIN LOGIC
-            try:
-                await worker.leave_group_call(int(chat_id))
+            # Not Connected -> Join & Play
+            try: await worker.leave_group_call(int(chat_id))
             except: pass
             
             await asyncio.sleep(0.5)
-            
-            # 🔥 Try Joining
             await worker.join_group_call(int(chat_id), stream)
             await add_active_chat(chat_id)
             
-            # Queue & UI
             await put_queue(chat_id, file_path, safe_title, duration, safe_user, link, thumbnail)
             song_data = {"title": safe_title, "duration": duration, "by": safe_user, "link": link, "thumbnail": thumbnail}
             await send_now_playing(chat_id, song_data)
@@ -172,7 +184,6 @@ async def play_stream(chat_id, file_path, title, duration, user, link, thumbnail
 
         if "invite_hash_expired" in err_str or "expired" in err_str:
             return None, "❌ **Link Expired!** Assistant ko group se remove karke wapis add karo."
-        
         elif "already" in err_str:
              try:
                 await worker.leave_group_call(int(chat_id))
@@ -185,10 +196,9 @@ async def play_stream(chat_id, file_path, title, duration, user, link, thumbnail
                 return True, 0
              except Exception as final_e:
                 return None, f"⚠️ Error: {final_e}"
-        
         return None, str(e)
 
-# --- 2. STREAM END HANDLER (Safe) ---
+# --- 2. STREAM END HANDLER ---
 if worker:
     @worker.on_stream_end()
     async def stream_end_handler(client, update: Update):
@@ -201,30 +211,26 @@ if worker:
         
         await asyncio.sleep(1)
         
-        # 1. Current hatao
+        # 1. Current Song ko Queue se hatao
         await pop_queue(chat_id)
         
-        # 2. Next check karo
+        # 2. Next song check karo
         queue = await get_queue(chat_id)
         
         if queue and len(queue) > 0:
             next_song = queue[0]
             print(f"🎵 Playing Next: {next_song['title']}")
-            
             try:
                 stream = AudioPiped(next_song["file"], audio_parameters=HighQualityAudio())
                 try:
                     await worker.change_stream(chat_id, stream)
                 except:
-                    # Agar change fail ho, to rejoin karo
+                    # Fallback to Rejoin
                     try: await worker.leave_group_call(chat_id)
                     except: pass
                     await asyncio.sleep(1)
                     await worker.join_group_call(chat_id, stream)
-                
-                # UI Send karo
                 await send_now_playing(chat_id, next_song)
-
             except Exception as e:
                 print(f"❌ Auto-Play Error: {e}")
                 await stop_stream(chat_id)
@@ -232,10 +238,19 @@ if worker:
             print(f"✅ Queue Empty for {chat_id}, Leaving VC.")
             await stop_stream(chat_id)
 
-# --- 3. OTHER CONTROLS ---
+# --- 3. SKIP LOGIC ---
 async def skip_stream(chat_id):
     if not worker: return False
+    
+    # Message Delete
+    if chat_id in LAST_MSG_ID:
+        try: await main_bot.delete_message(chat_id, LAST_MSG_ID[chat_id])
+        except: pass
+
+    # Current Song Pop
     await pop_queue(chat_id)
+    
+    # Check Next
     queue = await get_queue(chat_id)
     if queue and len(queue) > 0:
         next_song = queue[0]
@@ -244,13 +259,16 @@ async def skip_stream(chat_id):
             await worker.change_stream(chat_id, stream)
             await send_now_playing(chat_id, next_song)
             return True 
-        except:
+        except Exception as e:
+            print(f"⚠️ Skip Error: {e}")
             await stop_stream(chat_id)
             return False
     else:
+        # Queue Empty -> Stop
         await stop_stream(chat_id)
         return False
 
+# --- 4. STOP/PAUSE/RESUME/GET ---
 async def stop_stream(chat_id):
     if not worker: return False
     try:
@@ -265,16 +283,12 @@ async def stop_stream(chat_id):
 
 async def pause_stream(chat_id):
     if not worker: return False
-    try:
-        await worker.pause_stream(chat_id)
-        return True
+    try: await worker.pause_stream(chat_id); return True
     except: return False
 
 async def resume_stream(chat_id):
     if not worker: return False
-    try:
-        await worker.resume_stream(chat_id)
-        return True
+    try: await worker.resume_stream(chat_id); return True
     except: return False
 
 async def get_current_playing(chat_id):
