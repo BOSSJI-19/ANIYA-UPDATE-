@@ -1,3 +1,4 @@
+
 import asyncio
 import os
 import html 
@@ -115,7 +116,7 @@ async def start_music_worker():
     except Exception as e:
         print(f"❌ Assistant Error: {e}")
 
-# --- 1. PLAY LOGIC (PrinceMusic Style) ---
+# --- 1. PLAY LOGIC (SMART FIX: Direct Play First) ---
 async def play_stream(chat_id, file_path, title, duration, user, link, thumbnail):
     if not worker: return None, "Music System Error"
     
@@ -124,64 +125,48 @@ async def play_stream(chat_id, file_path, title, duration, user, link, thumbnail
     stream = AudioPiped(file_path, audio_parameters=HighQualityAudio())
 
     try:
-        # ✅ STEP 1: CHECK ACTIVE CALL
-        # Hum `is_active_chat` function nahi use kar rahe kyunki wo db wala hai.
-        # Hum direct PyTgCalls se poochenge: "Kya tum is chat mein zinda ho?"
-        is_active = False
-        try:
-            for call in worker.active_calls:
-                if call.chat_id == chat_id:
-                    is_active = True
-                    break
-        except: pass
-
-        # ✅ STEP 2: LOGIC SPLIT
-        if is_active:
-            # === AGAR BOT ACTIVE HAI ===
-            # Seedha Queue mein daalo. Position check mat karo. 
-            # Gaana chal raha hai, disturb mat karo.
-            position = await put_queue(chat_id, file_path, safe_title, duration, safe_user, link, thumbnail)
-            return False, position
+        # ✅ STEP 1: Pehle Database mein Queue update karo
+        position = await put_queue(chat_id, file_path, safe_title, duration, safe_user, link, thumbnail)
         
-        else:
-            # === AGAR BOT ACTIVE NAHI HAI ===
-            # 1. Join karo
-            try: await worker.leave_group_call(int(chat_id))
-            except: pass
-            await asyncio.sleep(0.5)
-            await worker.join_group_call(int(chat_id), stream)
+        # ✅ STEP 2: Logic Check
+        # Agar Position 0 hai (List khali thi), toh matlab Bajana hai.
+        # Chahe Assistant andar ho ya bahar, bajna chahiye.
+        if position == 0:
+            print(f"⚡ [PLAY] Force Playing Position #0 in {chat_id}")
             
-            # 2. Database update
-            await add_active_chat(chat_id)
-            
-            # 3. Queue mein daalo (Ye song #1 banega)
-            await put_queue(chat_id, file_path, safe_title, duration, safe_user, link, thumbnail)
-            
-            # 4. UI Send karo
-            song_data = {"title": safe_title, "duration": duration, "by": safe_user, "link": link, "thumbnail": thumbnail}
-            await send_now_playing(chat_id, song_data)
-            
-            return True, 0
-
-    except Exception as e:
-        err_str = str(e).lower()
-        print(f"⚠️ Play Error in {chat_id}: {e}")
-
-        if "invite_hash_expired" in err_str or "expired" in err_str:
-            return None, "❌ **Link Expired!** Assistant ko remove karke wapis add karo."
-        elif "already" in err_str:
-             # Retry Logic
-             try:
-                await worker.leave_group_call(int(chat_id))
-                await asyncio.sleep(1)
-                await worker.join_group_call(int(chat_id), stream)
+            # 🔥 TRY 1: Direct Play (Agar Assistant pehle se andar hai)
+            # Ye bina 'Join' kiye gaana baja dega, to 'Invite Hash Error' nahi aayega.
+            try:
+                await worker.change_stream(int(chat_id), stream)
                 await add_active_chat(chat_id)
-                await put_queue(chat_id, file_path, safe_title, duration, safe_user, link, thumbnail)
+                
+                # UI Update
                 song_data = {"title": safe_title, "duration": duration, "by": safe_user, "link": link, "thumbnail": thumbnail}
                 await send_now_playing(chat_id, song_data)
                 return True, 0
-             except Exception as final_e:
-                return None, f"⚠️ Error: {final_e}"
+
+            except Exception as e:
+                # 🔥 TRY 2: Agar Change fail hua (Matlab Assistant bahar hai), tab Join karo.
+                print(f"⚠️ Direct Play Failed ({e}), Joining Now...")
+                try:
+                    try: await worker.leave_group_call(int(chat_id))
+                    except: pass
+                    await asyncio.sleep(0.5)
+                    await worker.join_group_call(int(chat_id), stream)
+                    await add_active_chat(chat_id)
+                    
+                    song_data = {"title": safe_title, "duration": duration, "by": safe_user, "link": link, "thumbnail": thumbnail}
+                    await send_now_playing(chat_id, song_data)
+                    return True, 0
+                except Exception as join_e:
+                    # Agar Join bhi fail ho jaye
+                    return None, f"⚠️ Connection Error: {join_e}"
+
+        # ✅ STEP 3: Agar Position > 0 hai (Queue mein aur gaane hain)
+        else:
+            return False, position
+
+    except Exception as e:
         return None, str(e)
 
 # --- 2. STREAM END HANDLER ---
@@ -198,10 +183,10 @@ if worker:
         
         await asyncio.sleep(1)
         
-        # 1. Jo khatam hua usse nikalo
+        # 1. Purana hatao
         await pop_queue(chat_id)
         
-        # 2. Next kya hai dekho
+        # 2. Next Check
         queue = await get_queue(chat_id)
         
         if queue and len(queue) > 0:
@@ -209,19 +194,19 @@ if worker:
             print(f"🎵 Playing Next: {next_song['title']}")
             try:
                 stream = AudioPiped(next_song["file"], audio_parameters=HighQualityAudio())
-                await worker.change_stream(chat_id, stream)
+                try:
+                    await worker.change_stream(chat_id, stream)
+                except:
+                    # Rejoin Fallback
+                    try: await worker.leave_group_call(chat_id)
+                    except: pass
+                    await asyncio.sleep(0.5)
+                    await worker.join_group_call(chat_id, stream)
+                
                 await send_now_playing(chat_id, next_song)
             except Exception as e:
-                print(f"❌ Play Next Error: {e}, Rejoining...")
-                # Rejoin Fallback
-                try: await worker.leave_group_call(chat_id)
-                except: pass
-                await asyncio.sleep(0.5)
-                try:
-                    await worker.join_group_call(chat_id, stream)
-                    await send_now_playing(chat_id, next_song)
-                except:
-                    await stop_stream(chat_id)
+                print(f"❌ Auto-Play Error: {e}")
+                await stop_stream(chat_id)
         else:
             print(f"✅ Queue Empty for {chat_id}, Leaving VC.")
             await stop_stream(chat_id)
@@ -235,10 +220,8 @@ async def skip_stream(chat_id):
         except: pass
         if chat_id in LAST_MSG_ID: del LAST_MSG_ID[chat_id]
 
-    # Current hatao
     await pop_queue(chat_id)
     
-    # Next check
     queue = await get_queue(chat_id)
     if queue and len(queue) > 0:
         next_song = queue[0]
