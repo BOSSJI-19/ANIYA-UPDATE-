@@ -24,8 +24,9 @@ from tts import generate_voice
 from tools.stream import start_music_worker
 import tools.stream 
 
-# ✅ Broadcast Import (NEW ADDITION)
+# ✅ Broadcast Import & Database Functions (UPDATED)
 from tools.broadcast import register_broadcast_handlers
+from tools.database import add_served_user, add_served_chat  # <--- YE MISSING THA
 
 # MODULES 
 import admin, start, group, leaderboard, pay, bet, wordseek, chatstat, logger, events, info, tictactoe, couple
@@ -63,7 +64,6 @@ def load_plugins(application: Application):
 
     for file in path_list:
         module_name = file[:-3]
-        # Hum Broadcast ko manual load kar rahe hain, isliye yahan skip kar sakte hain
         if module_name == "broadcast": 
             continue
             
@@ -92,13 +92,12 @@ async def on_startup(application: Application):
         except Exception as e: 
             print(f"⚠️ Logger Error: {e}")
 
-# --- ⚙️ NEW COMMANDS: GCHAT & GSTICKER (STYLED) ---
+# --- ⚙️ NEW COMMANDS: GCHAT & GSTICKER ---
 
 async def toggle_gchat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     user = update.effective_user
     
-    # Admin Check
     if chat.type in ["group", "supergroup"]:
         member = await chat.get_member(user.id)
         if member.status not in ["administrator", "creator"]:
@@ -121,7 +120,6 @@ async def toggle_gsticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     user = update.effective_user
 
-    # Admin Check
     if chat.type in ["group", "supergroup"]:
         member = await chat.get_member(user.id)
         if member.status not in ["administrator", "creator"]:
@@ -288,12 +286,18 @@ async def callback_handler(update, context):
         await livetime.close_time(update, context)
         return
 
-# --- MESSAGE HANDLER (UPDATED FOR COMPLETE SILENCE) ---
+# --- MESSAGE HANDLER (UPDATED FOR BROADCAST SAVING) ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message: return
     user = update.effective_user
     chat = update.effective_chat
     
+    # 🔥 DATA SAVE FOR BROADCAST (VERY IMPORTANT)
+    if chat.type == "private":
+        await add_served_user(user.id)
+    else:
+        await add_served_chat(chat.id)
+
     # 0. DM SPAM PROTECTION
     if chat.type == "private":
         spam_status = dmspam.check_spam(user.id)
@@ -334,7 +338,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 5. STICKER REPLY
     if update.message.sticker:
-        # Agar Sticker Mode OFF hai, toh ignore karo
         if not sticker_enabled:
             return
 
@@ -348,11 +351,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not text: return
 
     # 🔥 COMPLETE SILENCE LOGIC
-    # Agar Private Chat nahi hai aur Chat Mode OFF hai -> RETURN KAR DO (Bilkul Chup)
     if chat.type != "private" and not chat_enabled:
         return 
 
-    # Normal AI Logic
     should_reply = False
     if chat.type == "private": should_reply = True
     elif any(trigger in text.lower() for trigger in ["aniya", context.bot.username.lower()]): should_reply = True
@@ -364,7 +365,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await context.bot.send_chat_action(chat_id=chat.id, action="typing")
         
-        # 🔥 AI Response + Reaction (Async)
         ai_reply = await get_yuki_response(user.id, text, user.first_name, update.message)
 
         if wants_voice:
@@ -451,4 +451,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-        
+            
