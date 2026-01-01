@@ -6,12 +6,11 @@ from pytgcalls.types import AudioPiped, Update, HighQualityAudio
 from telegram import Bot, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.constants import ParseMode
 from pyrogram import Client
-from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant
 
 # Configs
-from config import API_ID, API_HASH, SESSION, BOT_TOKEN, OWNER_NAME, LOG_GROUP_ID, INSTAGRAM_LINK
+from config import API_ID, API_HASH, SESSION, BOT_TOKEN, OWNER_NAME, INSTAGRAM_LINK
 from tools.queue import put_queue, pop_queue, clear_queue, get_queue
-from tools.database import is_active_chat, add_active_chat, remove_active_chat
+from tools.database import add_active_chat, remove_active_chat
 
 # --- GLOBAL DICTIONARIES ---
 LAST_MSG_ID = {}   
@@ -52,7 +51,6 @@ async def send_now_playing(chat_id, song_data):
             try: await main_bot.delete_message(chat_id, LAST_MSG_ID[chat_id])
             except: pass
         
-        # HTML Escape
         title = html.escape(str(song_data["title"]))
         user = html.escape(str(song_data["by"]))
         duration = str(song_data["duration"])
@@ -101,7 +99,7 @@ async def send_now_playing(chat_id, song_data):
         LAST_MSG_ID[chat_id] = msg.message_id
         return True
     except Exception as e:
-        print(f"⚠️ [UI ERROR] Message nahi gaya, par music chalega. Error: {e}")
+        print(f"⚠️ [UI ERROR] Message nahi gaya: {e}")
         return False
 
 # --- 🔥 STARTUP LOGIC ---
@@ -117,7 +115,7 @@ async def start_music_worker():
     except Exception as e:
         print(f"❌ Assistant Error: {e}")
 
-# --- 1. PLAY LOGIC (FIXED: NO CUTTING SONGS) ---
+# --- 1. PLAY LOGIC (PrinceMusic Style) ---
 async def play_stream(chat_id, file_path, title, duration, user, link, thumbnail):
     if not worker: return None, "Music System Error"
     
@@ -126,52 +124,40 @@ async def play_stream(chat_id, file_path, title, duration, user, link, thumbnail
     stream = AudioPiped(file_path, audio_parameters=HighQualityAudio())
 
     try:
-        # Check Active Call
-        is_connected = False
+        # ✅ STEP 1: CHECK ACTIVE CALL
+        # Hum `is_active_chat` function nahi use kar rahe kyunki wo db wala hai.
+        # Hum direct PyTgCalls se poochenge: "Kya tum is chat mein zinda ho?"
+        is_active = False
         try:
             for call in worker.active_calls:
                 if call.chat_id == chat_id:
-                    is_connected = True
+                    is_active = True
                     break
         except: pass
 
-        if is_connected:
-            # ✅ STEP 1: Pehle queue mein daalo
+        # ✅ STEP 2: LOGIC SPLIT
+        if is_active:
+            # === AGAR BOT ACTIVE HAI ===
+            # Seedha Queue mein daalo. Position check mat karo. 
+            # Gaana chal raha hai, disturb mat karo.
             position = await put_queue(chat_id, file_path, safe_title, duration, safe_user, link, thumbnail)
-            
-            # 🔥 STEP 2: SMART CHECK
-            # Force Play sirf tab karo jab Position 0 ho AUR Koi Message na ho (Matlab music band hai)
-            if position == 0 and chat_id not in LAST_MSG_ID:
-                print(f"⚡ [IDLE FIX] Bot was truly idle in {chat_id}, Force Playing.")
-                try:
-                    await worker.change_stream(int(chat_id), stream)
-                    
-                    song_data = {"title": safe_title, "duration": duration, "by": safe_user, "link": link, "thumbnail": thumbnail}
-                    await send_now_playing(chat_id, song_data)
-                    return True, 0
-                except Exception as e:
-                    print(f"⚠️ Change Failed: {e}, Rejoining...")
-                    try: await worker.leave_group_call(int(chat_id))
-                    except: pass
-                    await asyncio.sleep(0.5)
-                    await worker.join_group_call(int(chat_id), stream)
-                    song_data = {"title": safe_title, "duration": duration, "by": safe_user, "link": link, "thumbnail": thumbnail}
-                    await send_now_playing(chat_id, song_data)
-                    return True, 0
-            
-            # Agar music chal raha hai (LAST_MSG_ID exists), to Queue position return karo
             return False, position
-
+        
         else:
-            # Not Connected -> Join & Play
+            # === AGAR BOT ACTIVE NAHI HAI ===
+            # 1. Join karo
             try: await worker.leave_group_call(int(chat_id))
             except: pass
-            
             await asyncio.sleep(0.5)
             await worker.join_group_call(int(chat_id), stream)
+            
+            # 2. Database update
             await add_active_chat(chat_id)
             
+            # 3. Queue mein daalo (Ye song #1 banega)
             await put_queue(chat_id, file_path, safe_title, duration, safe_user, link, thumbnail)
+            
+            # 4. UI Send karo
             song_data = {"title": safe_title, "duration": duration, "by": safe_user, "link": link, "thumbnail": thumbnail}
             await send_now_playing(chat_id, song_data)
             
@@ -182,8 +168,9 @@ async def play_stream(chat_id, file_path, title, duration, user, link, thumbnail
         print(f"⚠️ Play Error in {chat_id}: {e}")
 
         if "invite_hash_expired" in err_str or "expired" in err_str:
-            return None, "❌ **Link Expired!** Assistant ko group se remove karke wapis add karo."
+            return None, "❌ **Link Expired!** Assistant ko remove karke wapis add karo."
         elif "already" in err_str:
+             # Retry Logic
              try:
                 await worker.leave_group_call(int(chat_id))
                 await asyncio.sleep(1)
@@ -207,15 +194,14 @@ if worker:
         if chat_id in LAST_MSG_ID:
             try: await main_bot.delete_message(chat_id, LAST_MSG_ID[chat_id])
             except: pass 
-            # Message delete karte hi ID remove karo taaki Play logic ko pata chale bot free hai
             del LAST_MSG_ID[chat_id]
         
         await asyncio.sleep(1)
         
-        # 1. Current Song Pop
+        # 1. Jo khatam hua usse nikalo
         await pop_queue(chat_id)
         
-        # 2. Next Check
+        # 2. Next kya hai dekho
         queue = await get_queue(chat_id)
         
         if queue and len(queue) > 0:
@@ -223,32 +209,36 @@ if worker:
             print(f"🎵 Playing Next: {next_song['title']}")
             try:
                 stream = AudioPiped(next_song["file"], audio_parameters=HighQualityAudio())
-                try:
-                    await worker.change_stream(chat_id, stream)
-                except:
-                    try: await worker.leave_group_call(chat_id)
-                    except: pass
-                    await asyncio.sleep(1)
-                    await worker.join_group_call(chat_id, stream)
+                await worker.change_stream(chat_id, stream)
                 await send_now_playing(chat_id, next_song)
             except Exception as e:
-                print(f"❌ Auto-Play Error: {e}")
-                await stop_stream(chat_id)
+                print(f"❌ Play Next Error: {e}, Rejoining...")
+                # Rejoin Fallback
+                try: await worker.leave_group_call(chat_id)
+                except: pass
+                await asyncio.sleep(0.5)
+                try:
+                    await worker.join_group_call(chat_id, stream)
+                    await send_now_playing(chat_id, next_song)
+                except:
+                    await stop_stream(chat_id)
         else:
             print(f"✅ Queue Empty for {chat_id}, Leaving VC.")
             await stop_stream(chat_id)
 
-# --- 3. SKIP LOGIC ---
+# --- 3. CONTROLS ---
 async def skip_stream(chat_id):
     if not worker: return False
     
     if chat_id in LAST_MSG_ID:
         try: await main_bot.delete_message(chat_id, LAST_MSG_ID[chat_id])
         except: pass
-        # Safe Remove
         if chat_id in LAST_MSG_ID: del LAST_MSG_ID[chat_id]
 
+    # Current hatao
     await pop_queue(chat_id)
+    
+    # Next check
     queue = await get_queue(chat_id)
     if queue and len(queue) > 0:
         next_song = queue[0]
@@ -258,14 +248,12 @@ async def skip_stream(chat_id):
             await send_now_playing(chat_id, next_song)
             return True 
         except Exception as e:
-            print(f"⚠️ Skip Error: {e}")
             await stop_stream(chat_id)
             return False
     else:
         await stop_stream(chat_id)
         return False
 
-# --- 4. STOP/PAUSE/RESUME ---
 async def stop_stream(chat_id):
     if not worker: return False
     try:
@@ -293,4 +281,4 @@ async def get_current_playing(chat_id):
     queue = await get_queue(chat_id)
     if queue and len(queue) > 0: return queue[0]
     return None
-
+    
