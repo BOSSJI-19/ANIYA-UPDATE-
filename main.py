@@ -295,7 +295,7 @@ async def callback_handler(update, context):
         await livetime.close_time(update, context)
         return
 
-# --- 🔥 FIXED MESSAGE HANDLER (CRASH PROOF & CHAT LOGIC FIXED) ---
+# --- 🔥 FIXED MESSAGE HANDLER (CRASH PROOF & LOGIC FIXED) ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # 1. Basic Checks
@@ -326,7 +326,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # 5. Settings Check
         settings = get_group_settings(chat.id)
-        # ✅ FIX: Safe access for settings
+        # ✅ FIX: Safe access for settings. DEFAULT IS FALSE (Off)
         chat_enabled = settings.get("chat_mode", False) if settings else False
 
         # --- 🔥 DECISION LOGIC: KAB BOLNA HAI? 🔥 ---
@@ -338,11 +338,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if chat.type == "private":
             should_reply = True
 
-        # CASE B: Group Chat (Agar Gchat ON hai)
+        # CASE B: Group Chat (Agar Gchat ON hai -> Toh Har Message Pe Reply)
         elif chat_enabled:
             should_reply = True
 
-        # CASE C: Agar Gchat OFF hai, par kisi ne Bot ko Tag/Reply kiya
+        # CASE C: Agar Gchat OFF hai -> Toh Sirf Specific Conditions Pe Reply
+        # (Ye logic tab chalega jab chat_enabled False ho)
         elif f"@{bot_username}" in text.lower() or "aniya" in text.lower():
             should_reply = True
         elif update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
@@ -459,4 +460,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-            
+
