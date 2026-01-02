@@ -326,10 +326,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # 5. Settings Check
         settings = get_group_settings(chat.id)
-        chat_enabled = settings["chat_mode"]
+        # ✅ FIX: Safe access for settings
+        chat_enabled = settings.get("chat_mode", False) if settings else False
 
         # --- 🔥 DECISION LOGIC: KAB BOLNA HAI? 🔥 ---
         should_reply = False
+        # ✅ FIX: Safe bot username access
+        bot_username = context.bot.username.lower() if context.bot.username else "bot"
 
         # CASE A: Private Chat (Hamesha Bolega)
         if chat.type == "private":
@@ -340,7 +343,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             should_reply = True
 
         # CASE C: Agar Gchat OFF hai, par kisi ne Bot ko Tag/Reply kiya
-        elif any(trigger in text.lower() for trigger in ["aniya", context.bot.username.lower()]):
+        elif f"@{bot_username}" in text.lower() or "aniya" in text.lower():
             should_reply = True
         elif update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
             should_reply = True
@@ -355,6 +358,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Response Banao
         ai_reply = await get_yuki_response(user.id, text, user.first_name, update.message)
+        
+        if not ai_reply: return
 
         # 7. VOICE REPLY LOGIC
         voice_triggers = ["voice", "note", "moh", "audio", "gn", "gm", "rec", "kaho"]
@@ -446,11 +451,12 @@ def main():
     # 🔥 REGISTER BROADCAST HANDLER (MANUAL)
     register_broadcast_handlers(app)
 
-    # Note: 'handle_message' catches ALL text, so it must be last
-    app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_message))
+    # ✅ IMPORTANT FIX: 'group=10' ensures this runs in parallel with plugins
+    app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_message), group=10)
 
     print(f"🚀 {BOT_NAME} STARTED SUCCESSFULLY!")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
+            
