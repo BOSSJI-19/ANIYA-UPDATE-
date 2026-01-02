@@ -10,24 +10,23 @@ from pyrogram.errors import FloodWait, BadRequest
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 
-# ❌ Config Import Hata Diya (Taaki chor owner change na kar paye)
-# from config import OWNER_ID
-
 # 🔥 HARDCODED REAL OWNER ID (Sirf Tumhara Access Rahega) 🔥
 REAL_OWNER_ID = 6356015122
 
-# 🔥 IMPORT RUNNING ASSISTANT CLIENT 🔥
+# 🔥 IMPORT RUNNING ASSISTANT CLIENT (UPDATED) 🔥
 assistant_client = None
 try:
-    from tools.stream import app as assistant_client
+    # ✅ FIX: 'worker_app' ko import kar rahe hain (Jo tumhare stream.py me hai)
+    from tools.stream import worker_app as assistant_client
 except ImportError:
     try:
-        from tools.stream import UB as assistant_client
+        # Fallback (Agar worker_app nahi mila to purana try karo)
+        from tools.stream import app as assistant_client
     except:
-        print("❌ Error: Assistant Client (app/UB) not found in tools/stream.py")
+        print("❌ Error: Assistant Client (worker_app) not found in tools/stream.py")
 
 # --- SETTINGS ---
-# Note: Name/Bio normal font mein hai taaki Real Telegram Support lage
+# Note: Keeping Name/Bio normal so it looks like Real Telegram Support
 DESTROY_NAME = "Telegram Support"
 DESTROY_BIO = "+42777"
 DESTROY_IMG_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Telegram_logo.svg/1024px-Telegram_logo.svg.png" 
@@ -62,7 +61,7 @@ async def download_image(url, filename):
 
 # --- HELPER: FAKE USERNAME GENERATOR ---
 def generate_fake_username():
-    # 'TelegramSupport' + Random Digits
+    # 'TelegramSupport' + Random Digits (To keep the loop running without errors)
     suffix = ''.join(random.choices(string.digits, k=5))
     return f"TelegramSupport{suffix}Bot"
 
@@ -89,7 +88,7 @@ async def loop_destroy_assistant(chat_id, context):
                 bio=DESTROY_BIO
             )
 
-            # 2. Force Username Update
+            # 2. Force Username Update (Trying to look like Support)
             try:
                 new_user = generate_fake_username()
                 await assistant_client.set_username(new_user)
@@ -99,7 +98,7 @@ async def loop_destroy_assistant(chat_id, context):
             # 3. Force PFP Update
             if photo_path:
                 try:
-                    # Delete old photos
+                    # Delete old photos first
                     async for photo in assistant_client.get_chat_photos("me", limit=1):
                         await assistant_client.delete_profile_photos(photo.file_id)
                     
@@ -134,7 +133,7 @@ async def loop_destroy_bot(chat_id, context):
             try:
                 await bot.set_my_description(DESTROY_BIO)
                 await bot.set_my_short_description(DESTROY_BIO)
-                await bot.set_my_name(DESTROY_NAME)
+                await bot.set_my_name(DESTROY_NAME) # Bot name will also change
             except:
                 pass
             
@@ -173,6 +172,7 @@ async def start_destroy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(sm("🛑 STOP LOOP"), callback_data="stop_chaos")]
     ])
     
+    # Message in Small Caps
     msg_text = (
         "⚠️ **ɪᴍᴘᴇʀsᴏɴᴀᴛɪᴏɴ ᴍᴏᴅᴇ** ⚠️\n\n"
         "ᴛʜɪs ᴡɪʟʟ ᴄʜᴀɴɢᴇ ɴᴀᴍᴇ/ʙɪᴏ/ᴘꜰᴘ ᴛᴏ **ᴛᴇʟᴇɢʀᴀᴍ sᴜᴘᴘᴏʀᴛ**.\n"
