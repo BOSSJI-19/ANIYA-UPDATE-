@@ -69,7 +69,7 @@ def load_plugins(application: Application):
         module_name = file[:-3]
         if module_name == "broadcast": 
             continue
-            
+
         try:
             module = importlib.import_module(f"{plugin_dir}.{module_name}")
             if hasattr(module, "register_handlers"):
@@ -83,10 +83,10 @@ def load_plugins(application: Application):
 # --- STARTUP MESSAGE ---
 async def on_startup(application: Application):
     print(f"🚀 {BOT_NAME} IS STARTING...")
-    
+
     # ✅ Sync Maintenance State
     await sync_maintenance() 
-    
+
     print("🔵 Starting Music Assistant...")
     try: await start_music_worker()
     except Exception as e: print(f"❌ Assistant Start Failed: {e}")
@@ -99,13 +99,13 @@ async def on_startup(application: Application):
             await application.bot.send_message(chat_id=logger_id, text=txt, parse_mode=ParseMode.HTML)
         except Exception as e: 
             print(f"⚠️ Logger Error: {e}")
-            
+
 # --- ⚙️ NEW COMMANDS: GCHAT & GSTICKER ---
 
 async def toggle_gchat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     user = update.effective_user
-    
+
     if chat.type in ["group", "supergroup"]:
         member = await chat.get_member(user.id)
         if member.status not in ["administrator", "creator"]:
@@ -168,7 +168,7 @@ async def redeem_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = codes_col.find_one({"code": code})
     if not data: return await update.message.reply_text("❌ Invalid Code!")
     if user.id in data["redeemed_by"]: return await update.message.reply_text("⚠️ Already Redeemed!")
-    
+
     update_balance(user.id, data["amount"])
     codes_col.update_one({"code": code}, {"$push": {"redeemed_by": user.id}})
     await update.message.reply_text(f"🎉 Redeemed ₹{data['amount']}!")
@@ -179,12 +179,12 @@ async def callback_handler(update, context):
     data = q.data
     uid = q.from_user.id
     chat_id = update.effective_chat.id
-    
+
     # 🔥 1. MUSIC PLAYER CONTROLS
     if data.startswith("music_"):
         await q.answer()
         action = data.split("_")[1]
-        
+
         if action == "pause":
             await tools.stream.pause_stream(chat_id)
             await q.message.reply_text("II Stream Paused", quote=True)
@@ -212,7 +212,8 @@ async def callback_handler(update, context):
         except: pass
         return
 
-    if data == "help_main" or data.startswith("help_"):
+    # ✅ FIX 3: Loose check for 'help' to catch all help buttons
+    if "help" in data:
         await start.start_callback(update, context)
         return
 
@@ -225,7 +226,7 @@ async def callback_handler(update, context):
         await q.answer()
         await shop_menu(update, context)
         return
-    
+
     if data == "open_games":
         await q.answer()
         kb = [[InlineKeyboardButton("🔙 Back", callback_data="back_home")]]
@@ -253,7 +254,7 @@ async def callback_handler(update, context):
     if data.startswith(("rank_", "hide_rank")):
         await chatstat.rank_callback(update, context)
         return
-        
+
     if data.startswith(("set_", "clk_", "cash_", "close_", "noop_", "rebet_")):
         await bet.bet_callback(update, context)
         return
@@ -277,15 +278,15 @@ async def callback_handler(update, context):
         users_col.update_one({"_id": uid}, {"$push": {"titles": item["name"]}})
         await q.answer(f"Bought {item['name']}!")
         return
-    
+
     if data.startswith("revive_"):
         await pay.revive_callback(update, context)
         return
-        
+
     if data == "giveup_wordgrid":
         await wordgrid.give_up(update, context)
         return
-        
+
     if data.startswith("grid_"):
         await wordgrid.grid_callback(update, context)
         return
@@ -294,111 +295,100 @@ async def callback_handler(update, context):
         await livetime.close_time(update, context)
         return
 
-# --- MESSAGE HANDLER (UPDATED FOR BROADCAST SAVING) ---
+# --- 🔥 FIXED MESSAGE HANDLER (CRASH PROOF & CHAT LOGIC FIXED) ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message: return
-    user = update.effective_user
-    chat = update.effective_chat
-    
-    # 🔥 DATA SAVE FOR BROADCAST
-    if chat.type == "private":
-        await add_served_user(user.id)
-    else:
-        await add_served_chat(chat.id)
+    try:
+        # 1. Basic Checks
+        if not update.message: return
+        text = update.message.text
+        if not text: return # Media handling alag hai
 
-    # 0. DM SPAM PROTECTION
-    if chat.type == "private":
-        spam_status = dmspam.check_spam(user.id)
-        if spam_status == "BLOCKED": return 
-        elif spam_status == "NEW_BLOCK":
-            await update.message.reply_text("🚫 **Spam mat kar bhai!**\n5 minute ke liye block kiya ja raha hai.")
-            return 
+        user = update.effective_user
+        chat = update.effective_chat
 
-    # 1. ENFORCEMENT
-    if chat.type in ["group", "supergroup"] and not user.is_bot:
-        if is_user_banned(chat.id, user.id) or is_user_muted(chat.id, user.id):
-            try: await update.message.delete()
-            except: pass
+        # 2. Database Updates (Silent Fail Safe)
+        try:
+            if chat.type == "private": await add_served_user(user.id)
+            else: await add_served_chat(chat.id)
+            update_username(user.id, user.first_name)
+        except Exception as e:
+            print(f"⚠️ DB Error: {e}") # DB error se bot na ruke
+
+        # 3. Security Checks
+        if chat.type in ["group", "supergroup"] and not user.is_bot:
+            if is_user_banned(chat.id, user.id) or is_user_muted(chat.id, user.id):
+                try: await update.message.delete(); return
+                except: pass
+
+        # 4. Games Logic (Wordseek/Grid)
+        await wordseek.handle_word_guess(update, context)
+        await wordgrid.handle_word_guess(update, context)
+
+        # 5. Settings Check
+        settings = get_group_settings(chat.id)
+        chat_enabled = settings["chat_mode"]
+
+        # --- 🔥 DECISION LOGIC: KAB BOLNA HAI? 🔥 ---
+        should_reply = False
+
+        # CASE A: Private Chat (Hamesha Bolega)
+        if chat.type == "private":
+            should_reply = True
+
+        # CASE B: Group Chat (Agar Gchat ON hai)
+        elif chat_enabled:
+            should_reply = True
+
+        # CASE C: Agar Gchat OFF hai, par kisi ne Bot ko Tag/Reply kiya
+        elif any(trigger in text.lower() for trigger in ["aniya", context.bot.username.lower()]):
+            should_reply = True
+        elif update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
+            should_reply = True
+
+        # Agar reply nahi karna, to yahi ruk jao
+        if not should_reply:
             return
 
-    # 2. GLOBAL ANTI-SPAM
-    if not user.is_bot:
-        status = check_spam(user.id)
-        if status == "BLOCKED":
-            await update.message.reply_text(f"🚫 **Spam Detected!**\n{user.first_name}, blocked for 8 mins.")
-            return
-
-    # 3. STATS
-    update_username(user.id, user.first_name)
-    if chat.type in ["group", "supergroup"] and not user.is_bot:
-        update_chat_stats(chat.id, user.id, user.first_name)
-        update_group_activity(chat.id, chat.title)
-
-    # 4. ADMIN & GAMES
-    if await admin.handle_admin_input(update, context): return
-    await wordseek.handle_word_guess(update, context)
-    await wordgrid.handle_word_guess(update, context)
-
-    # 🛑 SETTINGS CHECK
-    settings = get_group_settings(chat.id)
-    chat_enabled = settings["chat_mode"]
-    sticker_enabled = settings["sticker_mode"]
-
-    # 5. STICKER REPLY
-    if update.message.sticker:
-        if not sticker_enabled:
-            return
-
-        if chat.type == "private" or (update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id) or random.random() < 0.2:
-            sticker_id = await get_mimi_sticker(context.bot)
-            if sticker_id: await update.message.reply_sticker(sticker_id)
-        return
-
-    # 6. TEXT & VOICE AI
-    text = update.message.text
-    if not text: return
-
-    # 🔥 COMPLETE SILENCE LOGIC
-    if chat.type != "private" and not chat_enabled:
-        return 
-
-    should_reply = False
-    if chat.type == "private": should_reply = True
-    elif any(trigger in text.lower() for trigger in ["aniya", context.bot.username.lower()]): should_reply = True
-    elif update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id: should_reply = True
-
-    if should_reply:
-        voice_triggers = ["voice", "note", "moh", "audio", "gn", "gm", "rec","kaho"]
-        wants_voice = any(v in text.lower() for v in voice_triggers)
-
+        # 6. AI RESPONSE GENERATION
+        # Yahan "Typing..." dikhayenge
         await context.bot.send_chat_action(chat_id=chat.id, action="typing")
-        
+
+        # Response Banao
         ai_reply = await get_yuki_response(user.id, text, user.first_name, update.message)
 
-        if wants_voice:
+        # 7. VOICE REPLY LOGIC
+        voice_triggers = ["voice", "note", "moh", "audio", "gn", "gm", "rec", "kaho"]
+        if any(v in text.lower() for v in voice_triggers):
             await context.bot.send_chat_action(chat_id=chat.id, action="record_voice")
             audio_path = await generate_voice(ai_reply)
-            
             if audio_path:
                 try:
-                    with open(audio_path, 'rb') as voice_file:
-                        await update.message.reply_voice(voice=voice_file)
+                    with open(audio_path, 'rb') as f:
+                        await update.message.reply_voice(voice=f)
                     os.remove(audio_path)
-                    return
-                except: await update.message.reply_text(ai_reply)
-            else: await update.message.reply_text(ai_reply)
+                except:
+                    await update.message.reply_text(ai_reply)
+            else:
+                await update.message.reply_text(ai_reply)
         else:
+            # Normal Text Reply
             await update.message.reply_text(ai_reply)
+
+    except Exception as e:
+        # ⚠️ AGAR CRASH HUA TO CONSOLE ME DIKHEGA
+        print(f"❌ CRASH IN HANDLE_MESSAGE: {e}")
 
 # --- MAIN ENGINE ---
 def main():
     keep_alive()
     app = Application.builder().token(TELEGRAM_TOKEN).post_init(on_startup).build()
-    
-    # 🔥🔥🔥 MAINTENANCE HANDLERS ADDED HERE (YE MISSING THE) 🔥🔥🔥
-    # TypeHandler sabse pehle chalega taaki block kar sake (group=-1)
+
+    # 🔥 1. Maintenance Handler
     app.add_handler(TypeHandler(Update, maintenance_gatekeeper), group=-1)
     app.add_handler(CommandHandler("maintenance", maintenance_command))
+
+    # 🔥 2. ADMIN INPUT HANDLER (Ye ab sabse pehle chalega - Fix for Admin Panel)
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), admin.handle_admin_input), group=1)
 
     # Handlers
     app.add_handler(CommandHandler("start", start.start))
@@ -441,15 +431,15 @@ def main():
     app.add_handler(CommandHandler(["gsticker", "Gsticker"], toggle_gsticker))
 
     app.add_handler(CallbackQueryHandler(callback_handler))
-    
+
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, events.welcome_user))
     app.add_handler(MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, events.track_leave))
     app.add_handler(MessageHandler(filters.StatusUpdate.VIDEO_CHAT_STARTED, events.vc_handler))
     app.add_handler(MessageHandler(filters.StatusUpdate.VIDEO_CHAT_ENDED, events.vc_handler))
     app.add_handler(MessageHandler(filters.StatusUpdate.VIDEO_CHAT_PARTICIPANTS_INVITED, events.vc_handler))
-    
+
     app.add_handler(MessageHandler(filters.Regex(r'(?i)^[\./]crank'), chatstat.show_leaderboard))
-    
+
     # 🔥 Plugins LOAD (Music vagera)
     load_plugins(app)
 
@@ -458,10 +448,9 @@ def main():
 
     # Note: 'handle_message' catches ALL text, so it must be last
     app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_message))
-    
+
     print(f"🚀 {BOT_NAME} STARTED SUCCESSFULLY!")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
-    
