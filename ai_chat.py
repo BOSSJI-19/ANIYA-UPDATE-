@@ -62,7 +62,7 @@ async def get_yuki_response(user_id, user_text, user_name, message_object):
 
     # 🔥 PROMPT (Updated for Date Awareness) 🔥
     full_prompt = (
-        f"System: Tera naam Aniya hai. Tu ek **Single** ladki hai (Naughty Bestie vibe). "
+        f"System: Tera naam shinju hai. Tu ek **Single** ladki hai (Naughty Bestie vibe). "
         f"Creator: {OWNER_NAME} (@{OWNER_USERNAME}). "
         f"Current Date & Time: {date_time_str} (India Time). "
         f"Group Link: {GROUP_LINK} (Sirf tab dena jab koi maange)."
@@ -81,7 +81,7 @@ async def get_yuki_response(user_id, user_text, user_name, message_object):
         
         f"\n\nChat History:\n{conversation_context}\n\n"
         f"User ({user_name}): {user_text}\n"
-        f"Aniya:"
+        f"shinju:"
     )
 
     random.shuffle(available_keys) 
