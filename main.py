@@ -355,7 +355,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif f"@{bot_username}" in text_lower:
                 should_reply = True
             # 3. Name Call (Aniya)
-            elif "aniya" in text_lower:
+            elif "shinju" in text_lower:
                 should_reply = True
         
         # Agar upar wali koi condition match nahi hui, to RETURN (Chup raho)
@@ -369,7 +369,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not ai_reply: return
 
         # 7. VOICE REPLY LOGIC
-        voice_triggers = ["voice", "note", "moh", "audio", "gn", "gm", "rec", "kaho"]
+        voice_triggers = ["voice", "note", "moh", "audio", "gn", "gm", "bolo", "kaho"]
         if any(v in text.lower() for v in voice_triggers):
             await context.bot.send_chat_action(chat_id=chat.id, action="record_voice")
             audio_path = await generate_voice(ai_reply)
