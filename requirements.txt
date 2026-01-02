@@ -1,4 +1,4 @@
-python-telegram-bot[job-queue]
+Python-telegram-bot[job-queue]
 APScheduler
 pymongo
 motor
@@ -10,6 +10,7 @@ pytz
 edge-tts
 ffmpeg-python
 tgcrypto
+telethon
 py-tgcalls==0.9.7
 nest_asyncio
 Pillow
