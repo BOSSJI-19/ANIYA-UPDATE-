@@ -100,29 +100,7 @@ async def on_startup(application: Application):
         except Exception as e: 
             print(f"⚠️ Logger Error: {e}")
 
-# --- ⚙️ NEW COMMANDS: GCHAT & GSTICKER ---
-
-async def toggle_gchat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    user = update.effective_user
-
-    if chat.type in ["group", "supergroup"]:
-        member = await chat.get_member(user.id)
-        if member.status not in ["administrator", "creator"]:
-            return await update.message.reply_text("❌ ᴏɴʟʏ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ᴄʜᴀɴɢᴇ ᴛʜɪꜱ ꜱᴇᴛᴛɪɴɢ!")
-
-    if not context.args:
-        return await update.message.reply_text("⚠️ ᴜꜱᴀɢᴇ: `/ɢᴄʜᴀᴛ ᴏɴ` ᴏʀ `/ɢᴄʜᴀᴛ ᴏꜰꜰ`")
-
-    state = context.args[0].lower()
-    if state == "on":
-        set_group_setting(chat.id, "chat_mode", True)
-        await update.message.reply_text(f"✅ **ᴄʜᴀᴛ ᴍᴏᴅᴇ ᴇɴᴀʙʟᴇᴅ!**\nɪ ᴡɪʟʟ ᴛᴀʟᴋ ɪɴ ᴛʜɪꜱ ɢʀᴏᴜᴘ ɴᴏᴡ.")
-    elif state == "off":
-        set_group_setting(chat.id, "chat_mode", False)
-        await update.message.reply_text(f"🔇 **ᴄʜᴀᴛ ᴍᴏᴅᴇ ᴅɪꜱᴀʙʟᴇᴅ!**\nɪ ᴡɪʟʟ ʙᴇ ǫᴜɪᴇᴛ ɴᴏᴡ.")
-    else:
-        await update.message.reply_text("⚠️ ᴜꜱᴀɢᴇ: `/ɢᴄʜᴀᴛ ᴏɴ` ᴏʀ `/ɢᴄʜᴀᴛ ᴏꜰꜰ`")
+# --- ⚙️ GSTICKER COMMAND (GChat Removed) ---
 
 async def toggle_gsticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
@@ -295,24 +273,24 @@ async def callback_handler(update, context):
         await livetime.close_time(update, context)
         return
 
-# --- 🔥 FIXED MESSAGE HANDLER (CRASH PROOF & LOGIC FIXED) ---
+# --- 🔥 FIXED MESSAGE HANDLER (STRICT REPLY ONLY MODE) ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # 1. Basic Checks
         if not update.message: return
         text = update.message.text
-        if not text: return # Media handling alag hai
+        if not text: return 
 
         user = update.effective_user
         chat = update.effective_chat
 
-        # 2. Database Updates (Silent Fail Safe)
+        # 2. Database Updates
         try:
             if chat.type == "private": await add_served_user(user.id)
             else: await add_served_chat(chat.id)
             update_username(user.id, user.first_name)
         except Exception as e:
-            print(f"⚠️ DB Error: {e}") # DB error se bot na ruke
+            print(f"⚠️ DB Error: {e}") 
 
         # 3. Security Checks
         if chat.type in ["group", "supergroup"] and not user.is_bot:
@@ -320,44 +298,37 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try: await update.message.delete(); return
                 except: pass
 
-        # 4. Games Logic (Wordseek/Grid)
+        # 4. Games Logic
         await wordseek.handle_word_guess(update, context)
         await wordgrid.handle_word_guess(update, context)
 
-        # 5. Settings Check
-        settings = get_group_settings(chat.id)
-        # ✅ FIX: Safe access for settings. DEFAULT IS FALSE (Off)
-        chat_enabled = settings.get("chat_mode", False) if settings else False
-
-        # --- 🔥 DECISION LOGIC: KAB BOLNA HAI? 🔥 ---
+        # --- 🔥 STRICT LOGIC: NO AUTO CHAT 🔥 ---
         should_reply = False
-        # ✅ FIX: Safe bot username access
         bot_username = context.bot.username.lower() if context.bot.username else "bot"
+        text_lower = text.lower()
 
-        # CASE A: Private Chat (Hamesha Bolega)
+        # CASE A: Private Chat (Yahan bolega)
         if chat.type == "private":
             should_reply = True
 
-        # CASE B: Group Chat (Agar Gchat ON hai -> Toh Har Message Pe Reply)
-        elif chat_enabled:
-            should_reply = True
-
-        # CASE C: Agar Gchat OFF hai -> Toh Sirf Specific Conditions Pe Reply
-        # (Ye logic tab chalega jab chat_enabled False ho)
-        elif f"@{bot_username}" in text.lower() or "aniya" in text.lower():
-            should_reply = True
-        elif update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
-            should_reply = True
-
-        # Agar reply nahi karna, to yahi ruk jao
+        # CASE B: Group Chat (Sirf Mention/Reply pe bolega)
+        else:
+            # 1. Reply to Bot
+            if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
+                should_reply = True
+            # 2. Mention (@BotName)
+            elif f"@{bot_username}" in text_lower:
+                should_reply = True
+            # 3. Name Call (Aniya)
+            elif "aniya" in text_lower:
+                should_reply = True
+        
+        # Agar upar wali koi condition match nahi hui, to RETURN (Chup raho)
         if not should_reply:
             return
 
         # 6. AI RESPONSE GENERATION
-        # Yahan "Typing..." dikhayenge
         await context.bot.send_chat_action(chat_id=chat.id, action="typing")
-
-        # Response Banao
         ai_reply = await get_yuki_response(user.id, text, user.first_name, update.message)
         
         if not ai_reply: return
@@ -377,11 +348,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await update.message.reply_text(ai_reply)
         else:
-            # Normal Text Reply
             await update.message.reply_text(ai_reply)
 
     except Exception as e:
-        # ⚠️ AGAR CRASH HUA TO CONSOLE ME DIKHEGA
         print(f"❌ CRASH IN HANDLE_MESSAGE: {e}")
 
 # --- MAIN ENGINE ---
@@ -432,8 +401,8 @@ def main():
     app.add_handler(CommandHandler("time", livetime.start_live_time))
     app.add_handler(MessageHandler(filters.Regex(r'^[\./]time'), livetime.start_live_time))
 
-    # ✅ REGISTER NEW COMMANDS
-    app.add_handler(CommandHandler(["gchat", "Gchat"], toggle_gchat))
+    # ✅ REGISTER NEW COMMANDS (GChat Removed)
+    # app.add_handler(CommandHandler(["gchat", "Gchat"], toggle_gchat))  <-- REMOVED
     app.add_handler(CommandHandler(["gsticker", "Gsticker"], toggle_gsticker))
 
     app.add_handler(CallbackQueryHandler(callback_handler))
@@ -452,7 +421,7 @@ def main():
     # 🔥 REGISTER BROADCAST HANDLER (MANUAL)
     register_broadcast_handlers(app)
 
-    # ✅ IMPORTANT FIX: 'group=10' ensures this runs in parallel with plugins
+    # ✅ IMPORTANT: 'group=10' ensures this runs in parallel with plugins
     app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_message), group=10)
 
     print(f"🚀 {BOT_NAME} STARTED SUCCESSFULLY!")
@@ -460,4 +429,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
+            
