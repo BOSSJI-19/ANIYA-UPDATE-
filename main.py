@@ -5,7 +5,7 @@ from threading import Thread
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, TypeHandler
 
 # IMPORTS
 from config import TELEGRAM_TOKEN, BOT_NAME 
@@ -20,17 +20,16 @@ from database import (
 from ai_chat import get_yuki_response, get_mimi_sticker
 from tts import generate_voice 
 
-# main.py ke imports section mein add karo
-from telegram.ext import TypeHandler 
+# ✅ Maintenance Import
 from maintenance import maintenance_gatekeeper, maintenance_command, sync_maintenance
 
 # ✅ Music Assistant Import
 from tools.stream import start_music_worker
 import tools.stream 
 
-# ✅ Broadcast Import & Database Functions (UPDATED)
+# ✅ Broadcast Import & Database Functions
 from tools.broadcast import register_broadcast_handlers
-from tools.database import add_served_user, add_served_chat  # <--- YE MISSING THA
+from tools.database import add_served_user, add_served_chat
 
 # MODULES 
 import admin, start, group, leaderboard, pay, bet, wordseek, chatstat, logger, events, info, tictactoe, couple
@@ -85,7 +84,7 @@ def load_plugins(application: Application):
 async def on_startup(application: Application):
     print(f"🚀 {BOT_NAME} IS STARTING...")
     
-    # 🔥 Brackets () lagana zaroori hai
+    # ✅ Sync Maintenance State
     await sync_maintenance() 
     
     print("🔵 Starting Music Assistant...")
@@ -301,7 +300,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat = update.effective_chat
     
-    # 🔥 DATA SAVE FOR BROADCAST (VERY IMPORTANT)
+    # 🔥 DATA SAVE FOR BROADCAST
     if chat.type == "private":
         await add_served_user(user.id)
     else:
@@ -340,7 +339,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await wordseek.handle_word_guess(update, context)
     await wordgrid.handle_word_guess(update, context)
 
-    # 🛑 SETTINGS CHECK (DATABASE SE)
+    # 🛑 SETTINGS CHECK
     settings = get_group_settings(chat.id)
     chat_enabled = settings["chat_mode"]
     sticker_enabled = settings["sticker_mode"]
@@ -396,6 +395,11 @@ def main():
     keep_alive()
     app = Application.builder().token(TELEGRAM_TOKEN).post_init(on_startup).build()
     
+    # 🔥🔥🔥 MAINTENANCE HANDLERS ADDED HERE (YE MISSING THE) 🔥🔥🔥
+    # TypeHandler sabse pehle chalega taaki block kar sake (group=-1)
+    app.add_handler(TypeHandler(Update, maintenance_gatekeeper), group=-1)
+    app.add_handler(CommandHandler("maintenance", maintenance_command))
+
     # Handlers
     app.add_handler(CommandHandler("start", start.start))
     app.add_handler(CommandHandler("admin", admin.admin_panel))
@@ -460,4 +464,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-            
+    
