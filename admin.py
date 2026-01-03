@@ -114,80 +114,155 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # --- Gemini Keys Menu ---
     if data == "admin_chat_keys_menu":
-        kb = [[InlineKeyboardButton("➕ Add Key", callback_data="admin_key_add")], [InlineKeyboardButton("➖ Del Key", callback_data="admin_key_del")], [InlineKeyboardButton("🔙 Back", callback_data="admin_back")]]
+        kb = [[InlineKeyboardButton("➕ Add Key", callback_data="admin_key_add")], 
+              [InlineKeyboardButton("➖ Del Key", callback_data="admin_key_del")], 
+              [InlineKeyboardButton("🔙 Back", callback_data="admin_back")]]
         msg = f"<blockquote><b>🔑 {to_fancy('GEMINI API KEYS')}</b></blockquote>"
         await q.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
         return
 
-    # (Baki sub-menus Stickers, Game Keys, Logger same rahenge tere wale...)
+    # --- Game Keys Menu ---
     if data == "admin_game_keys_menu":
-        kb = [[InlineKeyboardButton("➕ Add Key", callback_data="admin_game_key_add")], [InlineKeyboardButton("➖ Del Key", callback_data="admin_game_key_del")], [InlineKeyboardButton("🔙 Back", callback_data="admin_back")]]
-        msg = f"<blockquote><b>🎮 {to_fancy('GAME API KEYS')}</b></blockquote>"
+        kb = [[InlineKeyboardButton("➕ Add Key", callback_data="admin_game_key_add")], 
+              [InlineKeyboardButton("➖ Del Key", callback_data="admin_game_key_del")], 
+              [InlineKeyboardButton("🔙 Back", callback_data="admin_back")]]
+        msg = f"<blockquote><b>🎮 {to_fancy('GAME API KEYS')} (WordSeek)</b></blockquote>"
         await q.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
         return
 
+    # --- Stickers Menu ---
     if data == "admin_stickers_menu":
-        kb = [[InlineKeyboardButton("➕ Add Pack", callback_data="admin_pack_add")], [InlineKeyboardButton("➖ Del Pack", callback_data="admin_pack_del")], [InlineKeyboardButton("🔙 Back", callback_data="admin_back")]]
+        kb = [[InlineKeyboardButton("➕ Add Pack", callback_data="admin_pack_add")], 
+              [InlineKeyboardButton("➖ Del Pack", callback_data="admin_pack_del")], 
+              [InlineKeyboardButton("🔙 Back", callback_data="admin_back")]]
         msg = f"<blockquote><b>👻 {to_fancy('STICKER PACKS')}</b></blockquote>"
         await q.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
         return
 
+    # --- Logger Menu ---
     if data == "admin_logger_menu":
-        kb = [[InlineKeyboardButton("📝 Set Logger", callback_data="admin_set_logger")], [InlineKeyboardButton("🗑 Del Logger", callback_data="admin_del_logger")], [InlineKeyboardButton("🔙 Back", callback_data="admin_back")]]
+        kb = [[InlineKeyboardButton("📝 Set Logger", callback_data="admin_set_logger")], 
+              [InlineKeyboardButton("🗑 Del Logger", callback_data="admin_del_logger")], 
+              [InlineKeyboardButton("🔙 Back", callback_data="admin_back")]]
         msg = f"<blockquote><b>📝 {to_fancy('LOGGER SETTINGS')}</b></blockquote>"
         await q.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
         return
 
-    # --- INPUT TRIGGERS ---
-    if data == "admin_groq_set":
-        ADMIN_INPUT_STATE[user_id] = 'set_groq_key'
-        await q.edit_message_text(f"<blockquote>⚡ <b>Send Groq API Key:</b>\n(Starts with <code>gsk_</code>)</blockquote>", parse_mode=ParseMode.HTML)
+    # --- INPUT TRIGGERS (ADD & DELETE) ---
     
-    elif data == "admin_groq_del":
-        set_groq_api_key(None)
-        await q.answer("🗑 Groq Key Deleted!")
-        await admin_panel(update, context)
-
-    # (Tere purane input triggers: add_key, broadcast, etc.)
-    elif data == "admin_key_add":
+    # 1. Chat Keys
+    if data == "admin_key_add":
         ADMIN_INPUT_STATE[user_id] = 'add_key'
         await q.edit_message_text(f"<blockquote>➕ <b>Send Gemini API Key:</b></blockquote>", parse_mode=ParseMode.HTML)
+        return
     elif data == "admin_key_del":
         ADMIN_INPUT_STATE[user_id] = 'del_key'
         keys = "\n".join([f"<code>{k}</code>" for k in get_all_keys()])
         msg = f"<blockquote>➖ <b>Send Chat Key to delete:</b></blockquote>\n\n{keys}"
         await q.edit_message_text(msg, parse_mode=ParseMode.HTML)
+        return
+
+    # 2. Game Keys
+    elif data == "admin_game_key_add":
+        ADMIN_INPUT_STATE[user_id] = 'add_game_key'
+        await q.edit_message_text(f"<blockquote>🎮 <b>Send WordSeek API Key:</b></blockquote>", parse_mode=ParseMode.HTML)
+        return
+    elif data == "admin_game_key_del":
+        ADMIN_INPUT_STATE[user_id] = 'del_game_key'
+        keys = "\n".join([f"<code>{k}</code>" for k in get_game_keys()])
+        msg = f"<blockquote>➖ <b>Send Game Key to delete:</b></blockquote>\n\n{keys}"
+        await q.edit_message_text(msg, parse_mode=ParseMode.HTML)
+        return
+
+    # 3. Stickers
+    elif data == "admin_pack_add":
+        ADMIN_INPUT_STATE[user_id] = 'add_pack'
+        await q.edit_message_text(f"<blockquote>👻 <b>Send Sticker Pack Name or Link:</b></blockquote>", parse_mode=ParseMode.HTML)
+        return
+    elif data == "admin_pack_del":
+        ADMIN_INPUT_STATE[user_id] = 'del_pack'
+        packs = "\n".join([f"<code>{p}</code>" for p in get_sticker_packs()])
+        msg = f"<blockquote>➖ <b>Send Pack Name to delete:</b></blockquote>\n\n{packs}"
+        await q.edit_message_text(msg, parse_mode=ParseMode.HTML)
+        return
+
+    # 4. Groq Keys
+    elif data == "admin_groq_set":
+        ADMIN_INPUT_STATE[user_id] = 'set_groq_key'
+        await q.edit_message_text(f"<blockquote>⚡ <b>Send Groq API Key:</b>\n(Starts with <code>gsk_</code>)</blockquote>", parse_mode=ParseMode.HTML)
+        return
+    elif data == "admin_groq_del":
+        set_groq_api_key(None)
+        await q.answer("🗑 Groq Key Deleted!", show_alert=True)
+        await admin_panel(update, context)
+        return
+
+    # 5. Others
     elif data == "admin_cast_ask":
         ADMIN_INPUT_STATE[user_id] = 'broadcast'
-        await q.edit_message_text(f"<blockquote>📢 <b>Send anything to Broadcast:</b></blockquote>", parse_mode=ParseMode.HTML)
+        await q.edit_message_text(f"<blockquote>📢 <b>Send anything to Broadcast (Text/Photo/Video):</b></blockquote>", parse_mode=ParseMode.HTML)
+        return
     elif data == "admin_add_ask":
         ADMIN_INPUT_STATE[user_id] = 'add_money'
-        await q.edit_message_text(f"<blockquote>💰 <b>Format:</b> <code>UserID Amount</code></blockquote>", parse_mode=ParseMode.HTML)
+        await q.edit_message_text(f"<blockquote>💰 <b>Format:</b> <code>UserID Amount</code>\n(Ex: <code>12345 5000</code>)</blockquote>", parse_mode=ParseMode.HTML)
+        return
+    elif data == "admin_take_ask":
+        ADMIN_INPUT_STATE[user_id] = 'take_money'
+        await q.edit_message_text(f"<blockquote>💸 <b>Format:</b> <code>UserID Amount</code>\n(Ex: <code>12345 5000</code>)</blockquote>", parse_mode=ParseMode.HTML)
+        return
+    elif data == "admin_set_logger":
+        ADMIN_INPUT_STATE[user_id] = "waiting_logger_id"
+        await q.edit_message_text(f"<blockquote>📝 <b>Send Logger Group ID:</b></blockquote>", parse_mode=ParseMode.HTML)
+        return
+    elif data == "admin_code_ask":
+        ADMIN_INPUT_STATE[user_id] = 'create_code'
+        await q.edit_message_text(f"<blockquote>🎁 <b>Format:</b> <code>Name Amount Limit</code>\n(Ex: <code>MIMI100 500 10</code>)</blockquote>", parse_mode=ParseMode.HTML)
+        return
+
+    # --- ACTIONS ---
+    elif data == "admin_toggle_eco":
+        set_economy_status(not get_economy_status())
+        await admin_panel(update, context)
+        return
+    elif data == "admin_del_logger":
+        delete_logger_group()
+        await q.answer("🗑 Logger Deleted!", show_alert=True)
+        await admin_panel(update, context)
+        return
+    elif data == "admin_wipe_ask":
+        kb = [[InlineKeyboardButton("⚠️ CONFIRM WIPE", callback_data="admin_wipe_confirm")], 
+              [InlineKeyboardButton("🔙 Back", callback_data="admin_back")]]
+        msg = f"<blockquote>☢️ <b>DATABASE WIPE?</b></blockquote>\n<blockquote>This cannot be undone! Are you sure?</blockquote>"
+        await q.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
+        return
+    elif data == "admin_wipe_confirm":
+        wipe_database()
+        await q.edit_message_text("<blockquote>💀 <b>DATABASE WIPED!</b></blockquote>", parse_mode=ParseMode.HTML)
+        return
     elif data == "admin_back":
         await admin_panel(update, context)
+        return
     elif data == "admin_close":
         await q.message.delete()
-        if user_id in ADMIN_INPUT_STATE: del ADMIN_INPUT_STATE[user_id]
+        if user_id in ADMIN_INPUT_STATE: 
+            del ADMIN_INPUT_STATE[user_id]
+        return
 
 # --- 3. INPUT HANDLER ---
 async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if user_id not in OWNER_IDS: return False
+    
+    if user_id not in OWNER_IDS: 
+        return False
     
     state = ADMIN_INPUT_STATE.get(user_id)
-    if not state: return False
+    if not state: 
+        return False
 
     msg = update.message
     text = msg.text.strip() if msg.text else None
 
-    # 🔥 GROQ KEY HANDLER 🔥
-    if state == 'set_groq_key' and text:
-        set_groq_api_key(text)
-        await msg.reply_text("✅ Groq API Key Updated!")
-        del ADMIN_INPUT_STATE[user_id]
-        return True
-
-    # 🔥 BROADCAST LOGIC (Same as yours) 🔥
+    # 🔥 1. BROADCAST LOGIC (ANY MEDIA) 🔥
     if state == 'broadcast':
         users = list(users_col.find({}))
         groups = list(groups_col.find({}))
@@ -197,20 +272,93 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
             try: 
                 await context.bot.copy_message(chat_id=chat["_id"], from_chat_id=msg.chat_id, message_id=msg.message_id)
                 count += 1
-            except: pass
+            except: 
+                pass
         await status_msg.edit_text(f"✅ Sent to {count} chats!")
         del ADMIN_INPUT_STATE[user_id]
         return True
 
-    # Baki saare handlers (add_key, add_money, stickers) tere wale same yahan aayenge...
-    if not text: return False
+    if not text: 
+        return False
 
+    # 🔥 2. GROQ KEY HANDLER 🔥
+    if state == 'set_groq_key':
+        set_groq_api_key(text)
+        await msg.reply_text("✅ Groq API Key Updated!")
+        del ADMIN_INPUT_STATE[user_id]
+        return True
+
+    # 🔥 3. CHAT KEYS (GEMINI) 🔥
     if state == 'add_key':
-        if add_api_key(text): await msg.reply_text("✅ Gemini Key Added!")
-        else: await msg.reply_text("⚠️ Already Exists!")
+        if add_api_key(text): 
+            await msg.reply_text("✅ Gemini Key Added!")
+        else: 
+            await msg.reply_text("⚠️ Already Exists!")
     
-    # ... (Baki saara input handling logic jo tune bheja tha wo yahan continue hoga)
+    elif state == 'del_key':
+        if remove_api_key(text): 
+            await msg.reply_text("🗑 Gemini Key Deleted!")
+        else: 
+            await msg.reply_text("❌ Not Found.")
 
+    # 🔥 4. GAME KEYS (WORDSEEK) 🔥
+    elif state == 'add_game_key':
+        if add_game_key(text): 
+            await msg.reply_text("✅ Game Key Added!")
+        else: 
+            await msg.reply_text("⚠️ Already Exists!")
+
+    elif state == 'del_game_key':
+        if remove_game_key(text): 
+            await msg.reply_text("🗑 Game Key Deleted!")
+        else: 
+            await msg.reply_text("❌ Not Found.")
+
+    # 🔥 5. STICKER PACKS 🔥
+    elif state == 'add_pack':
+        pname = text.split('/')[-1]
+        try:
+            await context.bot.get_sticker_set(pname)
+            if add_sticker_pack(pname): 
+                await msg.reply_text(f"✅ Pack Added: `{pname}`")
+            else: 
+                await msg.reply_text("⚠️ Already Exists!")
+        except: 
+            await msg.reply_text("❌ Invalid Pack!")
+    
+    elif state == 'del_pack':
+        if remove_sticker_pack(text): 
+            await msg.reply_text("🗑 Pack Deleted!")
+        else: 
+            await msg.reply_text("❌ Not Found.")
+
+    # 🔥 6. MONEY & OTHERS 🔥
+    elif state in ['add_money', 'take_money']:
+        try:
+            parts = text.split()
+            tid, amt = int(parts[0]), int(parts[1])
+            if state == 'take_money': 
+                amt = -amt
+            update_balance(tid, amt)
+            await msg.reply_text("✅ Balance Updated!")
+        except: 
+            await msg.reply_text("❌ Error! Format: `ID Amount`")
+
+    elif state == 'create_code':
+        try:
+            parts = text.split()
+            codes_col.insert_one({"code": parts[0], "amount": int(parts[1]), "limit": int(parts[2]), "redeemed_by": []})
+            await msg.reply_text(f"🎁 Code Created: `{parts[0]}`")
+        except: 
+            await msg.reply_text("❌ Error!")
+
+    elif state == 'waiting_logger_id':
+        try:
+            set_logger_group(int(text))
+            await msg.reply_text(f"✅ Logger Set: `{text}`")
+        except: 
+            await msg.reply_text("❌ Invalid ID")
+
+    # Clear state
     del ADMIN_INPUT_STATE[user_id]
     return True
-    
