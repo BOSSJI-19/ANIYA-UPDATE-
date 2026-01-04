@@ -1,5 +1,6 @@
 import asyncio
 import aiohttp
+import os
 
 from tools.stream import play_stream, worker
 from tools.thumbnails import get_thumb
@@ -11,7 +12,7 @@ from config import MUSIC_API_URL, MUSIC_API_KEY
 
 async def fetch_from_api(query: str):
     """
-    Call your FastAPI (catbox API)
+    API Call karta hai.
     """
     url = f"{MUSIC_API_URL}/getvideo"
     params = {
@@ -19,32 +20,35 @@ async def fetch_from_api(query: str):
         "key": MUSIC_API_KEY
     }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, params=params) as resp:
-            if resp.status != 200:
-                return None
-            return await resp.json()
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params, timeout=60) as resp:
+                if resp.status != 200:
+                    return None
+                return await resp.json()
+    except Exception as e:
+        print(f"API Error: {e}")
+        return None
 
 
 async def process_stream(chat_id, user_name, query):
-    """
-    FINAL FLOW:
-    Search -> API -> Catbox Download -> Thumbnail -> Stream / Queue
-    """
-
     # ─────────────────────
     # 1️⃣ API REQUEST
     # ─────────────────────
-    try:
-        data = await fetch_from_api(query)
-        if not data or data.get("status") != 200:
-            return "❌ song not found.", None
+    data = await fetch_from_api(query)
+    
+    # Error Handling agar API down ho ya song na mile
+    if not data or data.get("status") != 200:
+        return "❌ Song not found or API Error.", None
 
-        vidid = data["video_id"]
-        catbox_link = data["link"]
+    # 🔥 Data Extraction (API se Title uthaya)
+    vidid = data.get("id") # Make sure API returns 'id'
+    title = data.get("title", "Unknown Title")
+    duration = data.get("duration", "0:00")
+    catbox_link = data.get("link")
 
-    except Exception as e:
-        return f"❌ api error: {e}", None
+    if not catbox_link:
+        return "❌ Download link missing from API.", None
 
     # ─────────────────────
     # 2️⃣ VC STATUS CHECK
@@ -52,37 +56,30 @@ async def process_stream(chat_id, user_name, query):
     try:
         queue = await get_db_queue(chat_id)
         is_streaming = False
-
         try:
             if chat_id in worker.active_calls:
                 is_streaming = True
-        except:
-            pass
+        except: pass
 
         if queue and not is_streaming:
             await clear_queue(chat_id)
-            print(f"🧹 queue cleared for {chat_id}")
-
     except Exception as e:
-        print(f"vc check error: {e}")
+        print(f"VC Check Error: {e}")
 
     # ─────────────────────
-    # 3️⃣ TITLE & THUMBNAIL
+    # 3️⃣ THUMBNAIL
     # ─────────────────────
-    title = vidid  # fallback (safe)
-    duration = "unknown"
-
-    thumbnail = await get_thumb(vidid)
-    if not thumbnail:
-        thumbnail = None
+    # Thumbnail ke liye Video ID chahiye
+    thumbnail = await get_thumb(vidid) if vidid else None
 
     # ─────────────────────
-    # 4️⃣ DOWNLOAD FROM CATBOX
+    # 4️⃣ DOWNLOAD FROM CATBOX (Local File)
     # ─────────────────────
     try:
+        # Link direct play bhi ho sakta hai, par download safer hai
         file_path = await download_from_catbox(catbox_link)
     except Exception as e:
-        return f"❌ download failed: {e}", None
+        return f"❌ Download failed: {e}", None
 
     # ─────────────────────
     # 5️⃣ PLAY / QUEUE
@@ -93,7 +90,7 @@ async def process_stream(chat_id, user_name, query):
         title,
         duration,
         user_name,
-        f"https://youtube.com/watch?v={vidid}",
+        f"https://youtube.com/watch?v={vidid}" if vidid else catbox_link,
         thumbnail
     )
 
@@ -105,10 +102,11 @@ async def process_stream(chat_id, user_name, query):
         "duration": duration,
         "thumbnail": thumbnail,
         "user": user_name,
-        "link": f"https://youtube.com/watch?v={vidid}",
+        "link": f"https://youtube.com/watch?v={vidid}" if vidid else catbox_link,
         "vidid": vidid,
         "status": status,
         "position": position
     }
 
     return None, response
+        
