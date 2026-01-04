@@ -19,6 +19,14 @@ GROUP_LINK = "https://t.me/+KNd7I2tIFuVlYmY9" # Apne Group ka Link
 # config.py
 INSTAGRAM_LINK = "https://www.instagram.com/ll_your_boss_ll" # Yahan apna link daal dena
 
+MUSIC_API_BASE = os.getenv(
+    "MUSIC_API_BASE",
+    "https://musicapifast-1.onrender.com"
+)
+
+MUSIC_API_KEY = os.getenv("MUSIC_API_KEY")  # sud-xxxx
+
+
 # --- FIX IS HERE ---
 # Humne BOT_TOKEN define kiya, aur TELEGRAM_TOKEN ko uska copy bana diya
 BOT_TOKEN = getenv("BOT_TOKEN") or getenv("TELEGRAM_TOKEN", "")
