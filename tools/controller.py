@@ -1,3 +1,4 @@
+import asyncio
 import aiohttp
 
 from tools.stream import play_stream, worker
@@ -8,13 +9,13 @@ from tools.catbox import download_from_catbox
 from config import MUSIC_API_URL, MUSIC_API_KEY
 
 
-# ─────────────────────────────
-# API CALL (ONLY VIDEO ID)
-# ─────────────────────────────
-async def fetch_from_api(video_id: str):
+async def fetch_from_api(query: str):
+    """
+    Call your FastAPI (catbox API)
+    """
     url = f"{MUSIC_API_URL}/getvideo"
     params = {
-        "query": video_id,   # ✅ ONLY VIDEO ID
+        "query": query,
         "key": MUSIC_API_KEY
     }
 
@@ -25,30 +26,25 @@ async def fetch_from_api(video_id: str):
             return await resp.json()
 
 
-# ─────────────────────────────
-# MAIN CONTROLLER
-# ─────────────────────────────
-async def process_stream(chat_id, user_name, data):
+async def process_stream(chat_id, user_name, query):
     """
-    data comes from music.py
-    data = {
-        title, duration, vidid, yt_link
-    }
+    FINAL FLOW:
+    Search -> API -> Catbox Download -> Thumbnail -> Stream / Queue
     """
 
-    title = data["title"]
-    duration = data["duration"]
-    vidid = data["vidid"]
-    yt_link = data["link"]
-
     # ─────────────────────
-    # 1️⃣ API CALL (VIDEO ID ONLY)
+    # 1️⃣ API REQUEST
     # ─────────────────────
-    api_data = await fetch_from_api(vidid)
-    if not api_data or api_data.get("status") != 200:
-        return "❌ api failed to provide file.", None
+    try:
+        data = await fetch_from_api(query)
+        if not data or data.get("status") != 200:
+            return "❌ song not found.", None
 
-    catbox_link = api_data["link"]
+        vidid = data["video_id"]
+        catbox_link = data["link"]
+
+    except Exception as e:
+        return f"❌ api error: {e}", None
 
     # ─────────────────────
     # 2️⃣ VC STATUS CHECK
@@ -65,14 +61,20 @@ async def process_stream(chat_id, user_name, data):
 
         if queue and not is_streaming:
             await clear_queue(chat_id)
+            print(f"🧹 queue cleared for {chat_id}")
 
     except Exception as e:
-        print("VC CHECK ERROR:", e)
+        print(f"vc check error: {e}")
 
     # ─────────────────────
-    # 3️⃣ THUMBNAIL (BOT SIDE)
+    # 3️⃣ TITLE & THUMBNAIL
     # ─────────────────────
+    title = vidid  # fallback (safe)
+    duration = "unknown"
+
     thumbnail = await get_thumb(vidid)
+    if not thumbnail:
+        thumbnail = None
 
     # ─────────────────────
     # 4️⃣ DOWNLOAD FROM CATBOX
@@ -91,20 +93,22 @@ async def process_stream(chat_id, user_name, data):
         title,
         duration,
         user_name,
-        yt_link,
+        f"https://youtube.com/watch?v={vidid}",
         thumbnail
     )
 
     # ─────────────────────
     # 6️⃣ RESPONSE
     # ─────────────────────
-    return None, {
+    response = {
         "title": title,
         "duration": duration,
         "thumbnail": thumbnail,
         "user": user_name,
-        "link": yt_link,
+        "link": f"https://youtube.com/watch?v={vidid}",
         "vidid": vidid,
         "status": status,
         "position": position
     }
+
+    return None, response
