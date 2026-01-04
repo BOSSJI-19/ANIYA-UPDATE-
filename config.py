@@ -24,6 +24,8 @@ MUSIC_API_BASE = os.getenv(
     "https://musicapifast-1.onrender.com"
 )
 
+# ─── MUSIC API CONFIG ───
+MUSIC_API_URL = "https://musicapifast-1.onrender.com"
 MUSIC_API_KEY = os.getenv("MUSIC_API_KEY")  # sud-xxxx
 
 
