@@ -6,16 +6,18 @@ from tools.thumbnails import get_thumb
 from tools.database import get_db_queue
 from tools.queue import clear_queue
 from tools.catbox import download_from_catbox
+from tools.youtube import YouTubeAPI
 from config import MUSIC_API_URL, MUSIC_API_KEY
 
+YouTube = YouTubeAPI()
 
-async def fetch_from_api(query: str):
-    """
-    Call your FastAPI (catbox API)
-    """
+# ─────────────────────────────
+# API CALL (ONLY VIDEO ID)
+# ─────────────────────────────
+async def fetch_from_api(video_id: str):
     url = f"{MUSIC_API_URL}/getvideo"
     params = {
-        "query": query,
+        "query": video_id,   # 🔥 ONLY VIDEO ID
         "key": MUSIC_API_KEY
     }
 
@@ -26,28 +28,51 @@ async def fetch_from_api(query: str):
             return await resp.json()
 
 
+# ─────────────────────────────
+# MAIN CONTROLLER
+# ─────────────────────────────
 async def process_stream(chat_id, user_name, query):
     """
-    FINAL FLOW:
-    Search -> API -> Catbox Download -> Thumbnail -> Stream / Queue
+    FINAL FLOW (LOCKED):
+    User query
+      → YouTube search (BOT)
+      → video_id, title, duration
+      → API(video_id)
+      → catbox link
+      → download
+      → VC play
     """
 
     # ─────────────────────
-    # 1️⃣ API REQUEST
+    # 1️⃣ YOUTUBE SEARCH (BOT SIDE)
     # ─────────────────────
     try:
-        data = await fetch_from_api(query)
-        if not data or data.get("status") != 200:
+        result, vidid = await YouTube.track(query)
+        if not result:
             return "❌ song not found.", None
 
-        vidid = data["video_id"]
-        catbox_link = data["link"]
+        title = result["title"]
+        duration = result["duration_min"]
+        yt_link = result["link"]
+
+    except Exception as e:
+        return f"❌ search error: {e}", None
+
+    # ─────────────────────
+    # 2️⃣ API CALL (VIDEO ID ONLY)
+    # ─────────────────────
+    try:
+        api_data = await fetch_from_api(vidid)
+        if not api_data or api_data.get("status") != 200:
+            return "❌ api failed to provide file.", None
+
+        catbox_link = api_data["link"]
 
     except Exception as e:
         return f"❌ api error: {e}", None
 
     # ─────────────────────
-    # 2️⃣ VC STATUS CHECK
+    # 3️⃣ VC STATUS CHECK
     # ─────────────────────
     try:
         queue = await get_db_queue(chat_id)
@@ -67,17 +92,12 @@ async def process_stream(chat_id, user_name, query):
         print(f"vc check error: {e}")
 
     # ─────────────────────
-    # 3️⃣ TITLE & THUMBNAIL
+    # 4️⃣ THUMBNAIL
     # ─────────────────────
-    title = vidid  # fallback (safe)
-    duration = "unknown"
-
     thumbnail = await get_thumb(vidid)
-    if not thumbnail:
-        thumbnail = None
 
     # ─────────────────────
-    # 4️⃣ DOWNLOAD FROM CATBOX
+    # 5️⃣ DOWNLOAD FROM CATBOX
     # ─────────────────────
     try:
         file_path = await download_from_catbox(catbox_link)
@@ -85,7 +105,7 @@ async def process_stream(chat_id, user_name, query):
         return f"❌ download failed: {e}", None
 
     # ─────────────────────
-    # 5️⃣ PLAY / QUEUE
+    # 6️⃣ PLAY / QUEUE
     # ─────────────────────
     status, position = await play_stream(
         chat_id,
@@ -93,19 +113,19 @@ async def process_stream(chat_id, user_name, query):
         title,
         duration,
         user_name,
-        f"https://youtube.com/watch?v={vidid}",
+        yt_link,
         thumbnail
     )
 
     # ─────────────────────
-    # 6️⃣ RESPONSE
+    # 7️⃣ RESPONSE
     # ─────────────────────
     response = {
         "title": title,
         "duration": duration,
         "thumbnail": thumbnail,
         "user": user_name,
-        "link": f"https://youtube.com/watch?v={vidid}",
+        "link": yt_link,
         "vidid": vidid,
         "status": status,
         "position": position
