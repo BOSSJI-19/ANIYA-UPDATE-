@@ -1,106 +1,114 @@
 import asyncio
-from tools.youtube import YouTubeAPI
-from tools.stream import play_stream, worker 
+import aiohttp
+
+from tools.stream import play_stream, worker
 from tools.thumbnails import get_thumb
 from tools.database import get_db_queue
-from tools.queue import clear_queue 
+from tools.queue import clear_queue
+from tools.catbox import download_from_catbox
+from config import MUSIC_API_URL, MUSIC_API_KEY
 
-# Initialize YouTube
-YouTube = YouTubeAPI()
+
+async def fetch_from_api(query: str):
+    """
+    Call your FastAPI (catbox API)
+    """
+    url = f"{MUSIC_API_URL}/getvideo"
+    params = {
+        "query": query,
+        "key": MUSIC_API_KEY
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, params=params) as resp:
+            if resp.status != 200:
+                return None
+            return await resp.json()
+
 
 async def process_stream(chat_id, user_name, query):
     """
-    Complete Flow: Search -> VC Check -> Download -> Thumbnail -> Stream/Queue
+    FINAL FLOW:
+    Search -> API -> Catbox Download -> Thumbnail -> Stream / Queue
     """
-    
-    # --- 1. SEARCHING ---
-    try:
-        # Link hai ya Name? check karke details nikalo
-        if "youtube.com" in query or "youtu.be" in query:
-             # Agar Link hai
-             # NOTE: Ye functions async hain, inpe run_sync mat lagana
-             title = await YouTube.title(query)
-             duration = await YouTube.duration(query)
-             thumbnail = await YouTube.thumbnail(query)
-             
-             if "v=" in query:
-                 vidid = query.split("v=")[-1].split("&")[0]
-             else:
-                 vidid = query.split("/")[-1]
-             link = query
-        else:
-            # Agar Name hai (Search)
-            # 🔥 FIX: Yahan se run_sync hataya hai kyunki YouTube.track async hai
-            result, vidid = await YouTube.track(query)
-            
-            if not result:
-                return "❌ Song not found.", None
-            title = result["title"]
-            duration = result["duration_min"]
-            thumbnail = result["thumb"]
-            link = result["link"]
-            
-    except Exception as e:
-        return f"❌ Search Error: {e}", None
 
-    # --- VC STATUS CHECK ---
+    # ─────────────────────
+    # 1️⃣ API REQUEST
+    # ─────────────────────
+    try:
+        data = await fetch_from_api(query)
+        if not data or data.get("status") != 200:
+            return "❌ song not found.", None
+
+        vidid = data["video_id"]
+        catbox_link = data["link"]
+
+    except Exception as e:
+        return f"❌ api error: {e}", None
+
+    # ─────────────────────
+    # 2️⃣ VC STATUS CHECK
+    # ─────────────────────
     try:
         queue = await get_db_queue(chat_id)
         is_streaming = False
-        
+
         try:
             if chat_id in worker.active_calls:
                 is_streaming = True
         except:
             pass
 
-        # Agar Queue hai par Streaming nahi ho rahi -> Clear Queue (Reset)
         if queue and not is_streaming:
             await clear_queue(chat_id)
-            print(f"🧹 Queue Cleared for {chat_id} (VC was Closed)")
-            
+            print(f"🧹 queue cleared for {chat_id}")
+
     except Exception as e:
-        print(f"VC Check Error: {e}")
+        print(f"vc check error: {e}")
 
-    # --- 2. THUMBNAIL GENERATION ---
-    final_thumb = await get_thumb(vidid)
-    if not final_thumb:
-        final_thumb = thumbnail 
+    # ─────────────────────
+    # 3️⃣ TITLE & THUMBNAIL
+    # ─────────────────────
+    title = vidid  # fallback (safe)
+    duration = "unknown"
 
-    # --- 3. DOWNLOADING ---
+    thumbnail = await get_thumb(vidid)
+    if not thumbnail:
+        thumbnail = None
+
+    # ─────────────────────
+    # 4️⃣ DOWNLOAD FROM CATBOX
+    # ─────────────────────
     try:
-        # 🔥 FIX: Yahan se bhi run_sync hataya
-        file_path, direct = await YouTube.download(
-            link, 
-            mystic=None,
-            title=title,
-            format_id="bestaudio"
-        )
+        file_path = await download_from_catbox(catbox_link)
     except Exception as e:
-        return f"❌ Download Error: {e}", None
+        return f"❌ download failed: {e}", None
 
-    # --- 4. PLAYING / QUEUING ---
+    # ─────────────────────
+    # 5️⃣ PLAY / QUEUE
+    # ─────────────────────
     status, position = await play_stream(
-        chat_id, 
-        file_path, 
-        title, 
-        duration, 
-        user_name, 
-        link,        
-        final_thumb  
+        chat_id,
+        file_path,
+        title,
+        duration,
+        user_name,
+        f"https://youtube.com/watch?v={vidid}",
+        thumbnail
     )
 
-    # --- 5. RESULT ---
+    # ─────────────────────
+    # 6️⃣ RESPONSE
+    # ─────────────────────
     response = {
         "title": title,
         "duration": duration,
-        "thumbnail": final_thumb, 
+        "thumbnail": thumbnail,
         "user": user_name,
-        "link": link,
+        "link": f"https://youtube.com/watch?v={vidid}",
         "vidid": vidid,
-        "status": status,    # True (Playing) / False (Queued)
-        "position": position # Queue Number
+        "status": status,
+        "position": position
     }
-    
+
     return None, response
-    
